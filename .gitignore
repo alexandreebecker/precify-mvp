@@ -1,0 +1,9 @@
+# Arquivos de ambiente e segredos
+.env
+firebase-key.json
+config_agencia.json
+.streamlit/
+
+# Arquivos de sistema e cache
+__pycache__/
+.DS_Store
