@@ -1,6 +1,6 @@
 # ==============================================================================
 # Precify MVP - Painel de Precificação com Streamlit e Firebase
-# VERSÃO FINAL CORRIGIDA - JSON Parsing
+# VERSÃO FINAL CORRIGIDA - String Escaping
 # ==============================================================================
 
 # --- 1. Importações de Bibliotecas ---
@@ -10,23 +10,26 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 from dotenv import load_dotenv
 import pandas as pd
-import json  # <-- IMPORTAÇÃO CRUCIAL QUE FALTAVA
+import json
 
 from streamlit.connections import ExperimentalBaseConnection
 from streamlit.runtime.caching import cache_resource
 
-# --- 2. Configuração da Conexão com Firebase (Método Moderno e CORRIGIDO) ---
+# --- 2. Configuração da Conexão com Firebase ---
 
 class FirebaseConnection(ExperimentalBaseConnection[firestore.Client]):
     def _connect(self, **kwargs) -> firestore.Client:
-        # Tenta buscar as credenciais dos segredos do Streamlit
         if 'GOOGLE_APPLICATION_CREDENTIALS_JSON' in st.secrets:
-            # AQUI ESTÁ A CORREÇÃO PRINCIPAL:
             creds_string = st.secrets["GOOGLE_APPLICATION_CREDENTIALS_JSON"]
-            creds_dict = json.loads(creds_string) # Transforma a string JSON em um dicionário Python
-            cred = credentials.Certificate(creds_dict) # Agora passamos o dicionário
+            
+            # AQUI ESTÁ A CORREÇÃO FINAL E DEFINITIVA:
+            # O JSON da private_key contém quebras de linha (\n) que são mal interpretadas.
+            # Esta linha substitui as quebras de linha literais pela sua forma de texto ("\\n"),
+            # tornando a string um JSON válido para o parser.
+            creds_dict = json.loads(creds_string.replace('\n', '\\n'))
+            
+            cred = credentials.Certificate(creds_dict)
         else:
-            # Fallback para desenvolvimento local
             try:
                 load_dotenv()
                 cred_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
@@ -61,7 +64,7 @@ if not db:
     st.warning("A aplicação não pode ser carregada pois a conexão com o banco de dados falhou.")
     st.stop()
 else:
-    # O RESTANTE DO CÓDIGO PERMANECE IDÊNTICO, NÃO PRECISA MUDAR NADA DAQUI PARA BAIXO
+    # O RESTANTE DO CÓDIGO PERMANECE IDÊNTICO
     
     produtos_ref = db.collection('produtos')
     menu = ["Visualizar Produtos", "Adicionar Produto", "Atualizar Produto", "Deletar Produto"]
