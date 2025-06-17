@@ -1,6 +1,6 @@
 # ==============================================================================
 # Precify MVP - Painel de Precificação com Streamlit e Firebase
-# VERSÃO FINAL CORRIGIDA
+# VERSÃO FINAL CORRIGIDA - JSON Parsing
 # ==============================================================================
 
 # --- 1. Importações de Bibliotecas ---
@@ -10,21 +10,23 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 from dotenv import load_dotenv
 import pandas as pd
-# A importação do ExperimentalBaseConnection pode variar, mas esta é a mais comum
+import json  # <-- IMPORTAÇÃO CRUCIAL QUE FALTAVA
+
 from streamlit.connections import ExperimentalBaseConnection
 from streamlit.runtime.caching import cache_resource
 
 # --- 2. Configuração da Conexão com Firebase (Método Moderno e CORRIGIDO) ---
 
-# Classe de Conexão Customizada para o Firebase Admin SDK
 class FirebaseConnection(ExperimentalBaseConnection[firestore.Client]):
     def _connect(self, **kwargs) -> firestore.Client:
-        # Tenta buscar as credenciais dos segredos do Streamlit (para deploy)
+        # Tenta buscar as credenciais dos segredos do Streamlit
         if 'GOOGLE_APPLICATION_CREDENTIALS_JSON' in st.secrets:
-            creds_json = st.secrets["GOOGLE_APPLICATION_CREDENTIALS_JSON"]
-            cred = credentials.Certificate(creds_json)
+            # AQUI ESTÁ A CORREÇÃO PRINCIPAL:
+            creds_string = st.secrets["GOOGLE_APPLICATION_CREDENTIALS_JSON"]
+            creds_dict = json.loads(creds_string) # Transforma a string JSON em um dicionário Python
+            cred = credentials.Certificate(creds_dict) # Agora passamos o dicionário
         else:
-            # Se não estiver em deploy, tenta conectar localmente usando .env
+            # Fallback para desenvolvimento local
             try:
                 load_dotenv()
                 cred_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
@@ -46,9 +48,7 @@ class FirebaseConnection(ExperimentalBaseConnection[firestore.Client]):
 st.set_page_config(page_title="Precify MVP", layout="wide")
 st.title("📊 Painel de Precificação - Precify MVP")
 
-# Tenta estabelecer a conexão USANDO A FORMA CORRETA
 try:
-    # AQUI ESTÁ A CORREÇÃO: Usamos st.connection para criar a instância
     conn = st.connection("firebase", type=FirebaseConnection)
     db = conn.get_client()
 except Exception as e:
@@ -61,8 +61,7 @@ if not db:
     st.warning("A aplicação não pode ser carregada pois a conexão com o banco de dados falhou.")
     st.stop()
 else:
-    # O restante do código do CRUD (visualizar, adicionar, etc.) permanece exatamente o mesmo.
-    # Não precisa alterar nada daqui para baixo.
+    # O RESTANTE DO CÓDIGO PERMANECE IDÊNTICO, NÃO PRECISA MUDAR NADA DAQUI PARA BAIXO
     
     produtos_ref = db.collection('produtos')
     menu = ["Visualizar Produtos", "Adicionar Produto", "Atualizar Produto", "Deletar Produto"]
