@@ -1,50 +1,31 @@
 # ==============================================================================
 # Precify MVP - Painel de Precificação com Streamlit e Firebase
-# VERSÃO DA VITÓRIA ABSOLUTA - A CORREÇÃO FINAL
+# VERSÃO DA VITÓRIA FINAL - SEM AMBIGUIDADE
 # ==============================================================================
 
-# --- 1. Importações de Bibliotecas ---
 import streamlit as st
-import os
 import firebase_admin
 from firebase_admin import credentials, firestore
-from dotenv import load_dotenv
 import pandas as pd
 import json
-
 from streamlit.connections import ExperimentalBaseConnection
 from streamlit.runtime.caching import cache_resource
 
-# --- 2. Configuração da Conexão com Firebase (Método Final) ---
+# --- 2. Configuração da Conexão com Firebase (Método Direto) ---
 
 class FirebaseConnection(ExperimentalBaseConnection[firestore.Client]):
     def _connect(self, **kwargs) -> firestore.Client:
-        creds = None
-        
-        # Tenta carregar dos segredos do Streamlit (para deploy)
-        if "FIREBASE_SECRETS_JSON" in st.secrets:
-            try:
-                creds_string = st.secrets["FIREBASE_SECRETS_JSON"]
-                
-                # AQUI ESTÁ A LINHA MÁGICA E DEFINITIVA:
-                # 1. .strip() remove os caracteres invisíveis do início e fim.
-                # 2. .replace() conserta as quebras de linha internas.
-                creds_dict = json.loads(creds_string.strip().replace('\n', '\\n'))
-                
-                creds = credentials.Certificate(creds_dict)
-            except Exception as e:
-                st.error(f"Erro ao processar o segredo FIREBASE_SECRETS_JSON: {e}")
-                return None
-        
-        # Se não estiver na nuvem, tenta carregar localmente
-        else:
-            try:
-                load_dotenv()
-                cred_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-                creds = credentials.Certificate(cred_path)
-            except Exception as e:
-                st.error(f"Credenciais locais do Firebase não encontradas: {e}")
-                return None
+        # ESTA É A ÚNICA LÓGICA AGORA. SEM IF/ELSE.
+        # ELE VAI TENTAR LER O SEGREDO. SE NÃO ACHAR, VAI QUEBRAR.
+        try:
+            creds_dict = json.loads(st.secrets["FIREBASE_SECRET_COMPACT_JSON"])
+            creds = credentials.Certificate(creds_dict)
+        except KeyError:
+            st.error("ERRO CRÍTICO: O segredo 'FIREBASE_SECRET_COMPACT_JSON' não foi encontrado no painel do Streamlit Cloud. Verifique o NOME do segredo.")
+            return None
+        except Exception as e:
+            st.error(f"Erro ao processar o segredo JSON. Verifique o CONTEÚDO do segredo: {e}")
+            return None
         
         if not firebase_admin._apps:
             firebase_admin.initialize_app(creds)
