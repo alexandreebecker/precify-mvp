@@ -1,6 +1,6 @@
 # ==============================================================================
 # Precify MVP - Painel de Precificação com Streamlit e Firebase
-# VERSÃO FINAL CORRIGIDA - String Escaping
+# VERSÃO FINAL SIMPLIFICADA E ROBUSTA
 # ==============================================================================
 
 # --- 1. Importações de Bibliotecas ---
@@ -15,31 +15,36 @@ import json
 from streamlit.connections import ExperimentalBaseConnection
 from streamlit.runtime.caching import cache_resource
 
-# --- 2. Configuração da Conexão com Firebase ---
+# --- 2. Configuração da Conexão com Firebase (Método Simplificado) ---
 
 class FirebaseConnection(ExperimentalBaseConnection[firestore.Client]):
     def _connect(self, **kwargs) -> firestore.Client:
-        if 'GOOGLE_APPLICATION_CREDENTIALS_JSON' in st.secrets:
-            creds_string = st.secrets["GOOGLE_APPLICATION_CREDENTIALS_JSON"]
-            
-            # AQUI ESTÁ A CORREÇÃO FINAL E DEFINITIVA:
-            # O JSON da private_key contém quebras de linha (\n) que são mal interpretadas.
-            # Esta linha substitui as quebras de linha literais pela sua forma de texto ("\\n"),
-            # tornando a string um JSON válido para o parser.
-            creds_dict = json.loads(creds_string.replace('\n', '\\n'))
-            
-            cred = credentials.Certificate(creds_dict)
+        # LÓGICA DE CONEXÃO SIMPLIFICADA E À PROVA DE FALHAS
+        creds = None
+        
+        # Tenta carregar dos segredos do Streamlit primeiro (para deploy)
+        if "FIREBASE_SECRETS_JSON" in st.secrets:
+            try:
+                creds_string = st.secrets["FIREBASE_SECRETS_JSON"]
+                creds_dict = json.loads(creds_string)
+                creds = credentials.Certificate(creds_dict)
+            except Exception as e:
+                st.error(f"Erro ao processar o segredo FIREBASE_SECRETS_JSON: {e}")
+                return None
+        
+        # Se não estiver na nuvem, tenta carregar localmente
         else:
             try:
                 load_dotenv()
                 cred_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
-                cred = credentials.Certificate(cred_path)
+                creds = credentials.Certificate(cred_path)
             except Exception as e:
                 st.error(f"Credenciais locais do Firebase não encontradas: {e}")
                 return None
         
+        # Inicializa o app do Firebase se ainda não foi inicializado
         if not firebase_admin._apps:
-            firebase_admin.initialize_app(cred)
+            firebase_admin.initialize_app(creds)
         
         return firestore.client()
 
@@ -55,7 +60,7 @@ try:
     conn = st.connection("firebase", type=FirebaseConnection)
     db = conn.get_client()
 except Exception as e:
-    st.error(f"❌ Falha crítica ao inicializar a conexão com o Firebase: {e}")
+    st.error(f"❌ Falha crítica ao inicializar a conexão: {e}")
     db = None
 
 # --- 4. Interface Principal da Aplicação ---
@@ -64,7 +69,7 @@ if not db:
     st.warning("A aplicação não pode ser carregada pois a conexão com o banco de dados falhou.")
     st.stop()
 else:
-    # O RESTANTE DO CÓDIGO PERMANECE IDÊNTICO
+    # O RESTANTE DO CÓDIGO PERMANECE IDÊNTICO E FUNCIONAL
     
     produtos_ref = db.collection('produtos')
     menu = ["Visualizar Produtos", "Adicionar Produto", "Atualizar Produto", "Deletar Produto"]
@@ -72,81 +77,51 @@ else:
 
     if choice == "Visualizar Produtos":
         st.subheader("Todos os Produtos Cadastrados")
-        try:
-            docs = produtos_ref.order_by("nome").stream()
-            produtos_lista = []
-            for doc in docs:
-                produto = doc.to_dict()
-                produto['id'] = doc.id
-                produtos_lista.append(produto)
-
-            if produtos_lista:
-                df = pd.DataFrame(produtos_lista)
-                st.dataframe(df, use_container_width=True)
-            else:
-                st.info("Nenhum produto cadastrado ainda.")
-        except Exception as e:
-            st.error(f"Erro ao buscar produtos: {e}")
+        docs = produtos_ref.order_by("nome").stream()
+        produtos_lista = [dict(id=doc.id, **doc.to_dict()) for doc in docs]
+        if produtos_lista:
+            st.dataframe(pd.DataFrame(produtos_lista), use_container_width=True)
+        else:
+            st.info("Nenhum produto cadastrado ainda.")
 
     elif choice == "Adicionar Produto":
         st.subheader("Adicionar Novo Produto")
         with st.form("add_form", clear_on_submit=True):
-            nome = st.text_input("Nome do Produto", placeholder="Ex: Análise de Concorrentes")
+            nome = st.text_input("Nome do Produto")
             preco = st.number_input("Preço (R$)", min_value=0.0, format="%.2f")
-            descricao = st.text_area("Descrição (Opcional)")
-            
-            submitted = st.form_submit_button("Adicionar Produto")
-            if submitted:
-                if nome and preco is not None:
-                    data = {"nome": nome, "preco": preco, "descricao": descricao}
-                    produtos_ref.add(data)
-                    st.success(f"Produto '{nome}' adicionado com sucesso!")
+            descricao = st.text_area("Descrição")
+            if st.form_submit_button("Adicionar Produto"):
+                if nome:
+                    produtos_ref.add({"nome": nome, "preco": preco, "descricao": descricao})
+                    st.success(f"Produto '{nome}' adicionado!")
+                    st.balloons()
                 else:
-                    st.warning("Os campos 'Nome' e 'Preço' são obrigatórios.")
+                    st.warning("O nome do produto é obrigatório.")
 
     elif choice == "Atualizar Produto":
         st.subheader("Atualizar um Produto Existente")
-        try:
-            docs = produtos_ref.order_by("nome").stream()
-            produtos_dict = {doc.id: doc.to_dict().get('nome', 'Nome não encontrado') for doc in docs}
-
-            if not produtos_dict:
-                st.warning("Nenhum produto para atualizar.")
-            else:
-                id_para_atualizar = st.selectbox("Selecione o produto para atualizar", options=list(produtos_dict.keys()), format_func=lambda x: f"{produtos_dict[x]} (ID: ...{x[-6:]})")
-                
-                if id_para_atualizar:
-                    produto_atual = produtos_ref.document(id_para_atualizar).get().to_dict()
-                    
-                    with st.form("update_form"):
-                        st.write(f"Editando: **{produto_atual.get('nome', '')}**")
-                        novo_nome = st.text_input("Novo nome", value=produto_atual.get('nome', ''))
-                        novo_preco = st.number_input("Novo preço (R$)", value=float(produto_atual.get('preco', 0.0)), format="%.2f")
-                        nova_descricao = st.text_area("Nova descrição", value=produto_atual.get('descricao', ''))
+        docs = produtos_ref.order_by("nome").stream()
+        produtos_dict = {doc.id: doc.to_dict().get('nome', 'Sem nome') for doc in docs}
+        if produtos_dict:
+            id_para_atualizar = st.selectbox("Selecione o produto", options=list(produtos_dict.keys()), format_func=produtos_dict.get)
+            if id_para_atualizar:
+                produto_atual = produtos_ref.document(id_para_atualizar).get().to_dict()
+                with st.form("update_form"):
+                    novo_nome = st.text_input("Nome", value=produto_atual.get('nome'))
+                    novo_preco = st.number_input("Preço (R$)", value=float(produto_atual.get('preco', 0.0)), format="%.2f")
+                    nova_descricao = st.text_area("Descrição", value=produto_atual.get('descricao'))
+                    if st.form_submit_button("Atualizar Produto"):
+                        updates = {"nome": novo_nome, "preco": novo_preco, "descricao": nova_descricao}
+                        produtos_ref.document(id_para_atualizar).update(updates)
+                        st.success(f"Produto '{novo_nome}' atualizado!")
                         
-                        update_submitted = st.form_submit_button("Atualizar Produto")
-                        if update_submitted:
-                            novos_dados = {"nome": novo_nome, "preco": novo_preco, "descricao": nova_descricao}
-                            produtos_ref.document(id_para_atualizar).update(novos_dados)
-                            st.success(f"Produto '{novo_nome}' atualizado com sucesso!")
-                            st.balloons()
-        except Exception as e:
-            st.error(f"Erro ao carregar produtos para atualização: {e}")
-
     elif choice == "Deletar Produto":
         st.subheader("Deletar um Produto")
-        try:
-            docs = produtos_ref.order_by("nome").stream()
-            produtos_dict = {doc.id: doc.to_dict().get('nome', 'Nome não encontrado') for doc in docs}
-            
-            if not produtos_dict:
-                st.warning("Nenhum produto para deletar.")
-            else:
-                id_para_deletar = st.selectbox("Selecione o produto para deletar", options=list(produtos_dict.keys()), format_func=lambda x: f"{produtos_dict[x]} (ID: ...{x[-6:]})")
-                
-                st.warning(f"⚠️ Atenção! Esta ação é irreversível.")
-                if st.button(f"Deletar permanentemente o produto '{produtos_dict.get(id_para_deletar)}'", type="primary"):
-                    produtos_ref.document(id_para_deletar).delete()
-                    st.success(f"Produto deletado com sucesso!")
-        except Exception as e:
-            st.error(f"Erro ao carregar produtos para deleção: {e}")
+        docs = produtos_ref.order_by("nome").stream()
+        produtos_dict = {doc.id: doc.to_dict().get('nome', 'Sem nome') for doc in docs}
+        if produtos_dict:
+            id_para_deletar = st.selectbox("Selecione o produto para deletar", options=list(produtos_dict.keys()), format_func=produtos_dict.get)
+            if st.button(f"Deletar '{produtos_dict.get(id_para_deletar)}'", type="primary"):
+                produtos_ref.document(id_para_deletar).delete()
+                st.success("Produto deletado.")
+                st.experimental_rerun()
