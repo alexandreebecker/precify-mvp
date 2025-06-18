@@ -1,5 +1,6 @@
 # ==============================================================================
 # Precify.AI MVP - Sprint 1: Implementação do Fluxo Principal de 4 Telas
+# Versão Limpa, Corrigida e Completa
 # ==============================================================================
 
 import streamlit as st
@@ -10,35 +11,41 @@ import json
 import time
 import datetime
 
-# --- 1. CONFIGURAÇÃO DA PÁGINA ---
+# --- 1. CONFIGURAÇÃO DA PÁGINA (Deve ser o primeiro comando do Streamlit) ---
 st.set_page_config(page_title="Precify.AI", layout="wide", initial_sidebar_state="auto")
 
-# --- 2. FUNÇÃO DE CONEXÃO COM FIREBASE ---
+# --- 2. FUNÇÃO DE CONEXÃO COM O FIREBASE (Robusta e com Cache) ---
 @st.cache_resource
 def initialize_firebase():
-    """Inicializa a conexão com o Firebase de forma segura."""
+    """
+    Inicializa a conexão com o Firebase de forma segura usando st.secrets.
+    Retorna o cliente do Firestore ou None se a conexão falhar.
+    """
     try:
         creds_dict = json.loads(st.secrets["FIREBASE_SECRET_COMPACT_JSON"])
         if not firebase_admin._apps:
             firebase_admin.initialize_app(credentials.Certificate(creds_dict))
         return firestore.client()
     except Exception as e:
-        st.error(f"FALHA NA CONEXÃO COM FIREBASE: {e}")
+        st.error(f"FALHA NA CONEXÃO COM O FIREBASE: Verifique seus Secrets. Erro: {e}")
         return None
 
-# --- 3. INICIALIZAÇÃO ---
+# --- 3. INICIALIZAÇÃO DA CONEXÃO ---
 db = initialize_firebase()
 
-# --- 4. FUNÇÕES DE AUTENTICAÇÃO ---
+# --- 4. FUNÇÕES DO APLICATIVO ---
+
 def sign_up(email, password, name):
     """Cria um novo usuário no Firebase Authentication."""
     try:
         auth.create_user(email=email, password=password, display_name=name)
         st.success("Usuário registrado com sucesso! Por favor, faça o login.")
-        time.sleep(2); st.rerun()
-    except Exception as e: st.error(f"Erro no registro: {e}")
+        time.sleep(2)
+        st.rerun()
+    except Exception as e:
+        st.error(f"Erro no registro: {e}")
 
-# --- 5. FUNÇÕES DE RENDERIZAÇÃO DAS TELAS DO FLUXO ---
+# --- FUNÇÕES DE RENDERIZAÇÃO PARA CADA TELA ---
 
 def render_tela1_categoria():
     st.header("Passo 1: Selecione a Categoria do Projeto")
@@ -46,26 +53,15 @@ def render_tela1_categoria():
     
     categorias = ["Online", "Offline", "360 (Integrado)", "Estratégico"]
     
-    # Usando colunas para um layout mais agradável
     col1, col2 = st.columns(2)
-    with col1:
-        if st.button(categorias[0], use_container_width=True):
-            st.session_state.categoria_selecionada = categorias[0]
-            st.session_state.view = 'tela2_briefing'
-            st.rerun()
-        if st.button(categorias[2], use_container_width=True):
-            st.session_state.categoria_selecionada = categorias[2]
-            st.session_state.view = 'tela2_briefing'
-            st.rerun()
-    with col2:
-        if st.button(categorias[1], use_container_width=True):
-            st.session_state.categoria_selecionada = categorias[1]
-            st.session_state.view = 'tela2_briefing'
-            st.rerun()
-        if st.button(categorias[3], use_container_width=True):
-            st.session_state.categoria_selecionada = categorias[3]
-            st.session_state.view = 'tela2_briefing'
-            st.rerun()
+    colunas = [col1, col2]
+    
+    for i, categoria in enumerate(categorias):
+        with colunas[i % 2]:
+            if st.button(categoria, use_container_width=True, key=f"cat_{categoria}"):
+                st.session_state.categoria_selecionada = categoria
+                st.session_state.view = 'tela2_briefing'
+                st.rerun()
 
 def render_tela2_briefing():
     categoria = st.session_state.get('categoria_selecionada', 'N/A')
@@ -81,32 +77,33 @@ def render_tela2_briefing():
         
         st.divider()
         st.write("**Detalhes estruturados:**")
+        
         # Formulário dinâmico (placeholder por enquanto)
         if categoria == "Online":
             st.multiselect("Canais Digitais", ["Instagram", "Google Ads", "TikTok"])
         elif categoria == "Offline":
             st.multiselect("Mídia Offline", ["Revista", "Rádio", "Outdoor"])
+        else:
+            st.info("Campos específicos para esta categoria aparecerão aqui.")
         
         prazo = st.date_input("Prazo desejado", min_value=datetime.date.today())
         
         submitted = st.form_submit_button("Analisar Briefing e Propor Escopo", type="primary")
     
-    if submitted and briefing_texto:
-        st.session_state.briefing_data = {"texto": briefing_texto, "prazo": prazo}
-        st.session_state.view = 'tela3_analise_ia'
-        st.rerun()
-    elif submitted:
-        st.warning("Por favor, preencha o campo de briefing.")
+    if submitted:
+        if briefing_texto:
+            st.session_state.briefing_data = {"texto": briefing_texto, "prazo": prazo}
+            st.session_state.view = 'tela3_analise_ia'
+            st.rerun()
+        else:
+            st.warning("Por favor, preencha o campo de briefing.")
 
 def render_tela3_analise_ia():
     st.header("Passo 3: Análise da IA e Escopo Sugerido")
     with st.status("Analisando briefing com LLM...", expanded=True) as status:
-        time.sleep(2)
-        st.write("Interpretando complexidade...")
-        time.sleep(1)
-        st.write("Propondo escopo de entregáveis...")
-        time.sleep(2)
-        status.update(label="Análise completa!", state="complete", expanded=False)
+        time.sleep(1); st.write("Interpretando complexidade...");
+        time.sleep(1); st.write("Propondo escopo de entregáveis...");
+        time.sleep(1); status.update(label="Análise completa!", state="complete", expanded=False)
 
     st.success("A IA interpretou o briefing e sugeriu o escopo abaixo.")
     
@@ -131,22 +128,24 @@ def render_tela4_ajustes():
     st.subheader("Orçamento Estimado")
     st.info("Aqui você poderá ajustar horas, margens e valores. (Funcionalidade em desenvolvimento)")
     
-    # Placeholder para a tabela de custos
     data = {'Item': ['Criação', 'Mídia Paga', 'Gestão'], 'Custo Estimado': [2500, 5000, 1200]}
     df = pd.DataFrame(data)
     st.dataframe(df, use_container_width=True)
     
     st.success("Orçamento final gerado!")
 
-# --- 6. ROTEAMENTO PRINCIPAL ---
+# --- 5. LÓGICA DE EXECUÇÃO E ROTEAMENTO ---
+
+# Se a conexão com o banco falhou, para o app.
+if not db:
+    st.error("A conexão com o banco de dados falhou. O aplicativo não pode continuar.")
+    st.stop()
+
 # Inicializa o estado da sessão
 if 'logged_in' not in st.session_state: st.session_state.logged_in = False
 if 'view' not in st.session_state: st.session_state.view = 'tela1_categoria'
 
-# Se a conexão com o banco falhou, para tudo
-if not db: st.stop()
-
-# Roteador: Decide se mostra a tela de Login ou o App
+# Roteador Principal: Decide se mostra a tela de Login ou o App
 if not st.session_state.logged_in:
     # --- TELA DE LOGIN / REGISTRO ---
     st.title("Bem-vindo ao Precify.AI")
@@ -161,7 +160,7 @@ if not st.session_state.logged_in:
                     st.session_state.user_info = {"name": user.display_name, "email": user.email, "uid": user.uid}
                     st.rerun()
                 except Exception: st.error("Usuário não encontrado.")
-    else:
+    else: # Registrar
         with st.form("register_form"):
             name = st.text_input("Nome"); email = st.text_input("Email"); password = st.text_input("Senha", type="password")
             if st.form_submit_button("Registrar"): sign_up(email, password, name)
@@ -169,11 +168,17 @@ else:
     # --- APLICAÇÃO PRINCIPAL (QUANDO O USUÁRIO ESTÁ LOGADO) ---
     user_info = st.session_state.user_info
     
-    # Barra lateral
-    st.sidebar.title(f"Olá, {user_info['name'].split()[0]}!")
+    # Lógica de saudação segura
+    nome_display = user_info.get('name')
+    saudacao = f"Olá, {nome_display.split()[0]}" if nome_display else "Olá!"
+    st.sidebar.title(saudacao)
+
     if st.sidebar.button("Logout"):
-        st.session_state.logged_in = False
-        st.session_state.clear(); st.rerun()
+        # Limpa todo o estado da sessão para um logout completo
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        st.rerun()
+    
     st.sidebar.divider()
     st.sidebar.write(f"**Projeto Atual:**")
     st.sidebar.write(f"Categoria: `{st.session_state.get('categoria_selecionada', 'Nenhuma')}`")
@@ -189,5 +194,5 @@ else:
     elif view == 'tela4_ajustes':
         render_tela4_ajustes()
     else:
-        # Fallback para a primeira tela se o estado for perdido
+        # Se nenhum estado de 'view' for encontrado, volta para a primeira tela.
         render_tela1_categoria()
