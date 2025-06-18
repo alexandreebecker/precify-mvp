@@ -48,7 +48,6 @@ def registrar_log_alteracao(db_client, agencia_id, usuario_email, acao, detalhes
         }
         db_client.collection('agencias').document(agencia_id).collection('historico_alteracoes').add(log_data)
     except Exception as e:
-        # Log não é uma falha crítica, então usamos um warning
         st.warning(f"Não foi possível registrar a alteração no histórico: {e}")
 
 def carregar_configuracoes_financeiras(db_client, agencia_id):
@@ -71,7 +70,8 @@ def salvar_configuracoes_financeiras(db_client, agencia_id, configs, usuario_ema
         st.session_state.config_financeiras = configs
         
         # Registrar o log da alteração
-        detalhes_log = f"Margens atualizadas: Lucro({configs['margem_lucro']}), Impostos({configs['impostos']}), Fixos({configs['custos_fixos']}), Coord.({configs['taxa_coordenacao']})"
+        detalhes_log = (f"Margens atualizadas: Lucro({configs['margem_lucro']}), Impostos({configs['impostos']}), "
+                        f"Fixos({configs['custos_fixos']}), Coord.({configs['taxa_coordenacao']})")
         registrar_log_alteracao(db_client, agencia_id, usuario_email, "Atualização de Config. Financeiras", detalhes_log)
         
     except Exception as e:
@@ -138,15 +138,12 @@ else:
                 submitted = st.form_submit_button("Adicionar Perfil")
 
                 if submitted and funcao and custo_hora > 0:
-                    # 1. Adicionar o perfil
                     novo_perfil = {"funcao": funcao, "custo_hora": custo_hora}
                     db.collection('agencias').document(agencia_id).collection('perfis_equipe').add(novo_perfil)
                     st.toast(f"Perfil '{funcao}' adicionado!", icon="✅")
                     
-                    # 2. Registrar o log da alteração
                     detalhes_log = f"Novo perfil '{funcao}' adicionado com custo/hora de R$ {custo_hora:.2f}."
-                    registrar_log_alteracao(db, agencia_id, user_info['email'], "Adição de Perfil de Equipe", detalhes_log)
-
+                    registrar_log_alteracao(db, agencia_id, user_info['email'], "Adição de Perfil", detalhes_log)
             st.divider()
 
             st.subheader("Perfis Cadastrados")
@@ -165,11 +162,13 @@ else:
                     with col2: st.text(f"R$ {perfil_data.get('custo_hora', 0):.2f}")
                     with col3:
                         if st.button("Deletar", key=f"del_{perfil_doc.id}", type="primary"):
+                            funcao_deletada = perfil_data.get('funcao', 'Desconhecido')
                             db.collection('agencias').document(agencia_id).collection('perfis_equipe').document(perfil_doc.id).delete()
-                            st.toast(f"Perfil '{perfil_data.get('funcao')}' deletado.")
+                            st.toast(f"Perfil '{funcao_deletada}' deletado.")
                             
-                            # Adicionar log de deleção (PRÓXIMO PASSO)
-                            
+                            # Registrar o log da deleção
+                            detalhes_log = f"O perfil '{funcao_deletada}' foi removido."
+                            registrar_log_alteracao(db, agencia_id, user_info['email'], "Deleção de Perfil", detalhes_log)
                             st.rerun()
 
         st.divider()
@@ -181,17 +180,16 @@ else:
         defaults = {"margem_lucro": 20.0, "impostos": 15.0, "custos_fixos": 10.0, "taxa_coordenacao": 10.0}
         
         st.subheader("⚙️ Configurações Financeiras da Agência")
-        st.caption("Defina as margens e taxas padrão...")
+        st.caption("Defina as margens e taxas padrão.")
 
         with st.form(key="form_configuracoes_financeiras"):
-            #... (código do formulário continua o mesmo)
             col1, col2 = st.columns(2)
             with col1:
-                margem_lucro = st.number_input( "Margem de Lucro (%)", value=st.session_state.config_financeiras.get("margem_lucro", defaults["margem_lucro"]))
-                impostos = st.number_input("Impostos (%)", value=st.session_state.config_financeiras.get("impostos", defaults["impostos"]))
+                margem_lucro = st.number_input("Margem de Lucro (%)", value=st.session_state.config_financeiras.get("margem_lucro", defaults["margem_lucro"]), min_value=0.0, step=1.0, format="%.2f")
+                impostos = st.number_input("Impostos (%)", value=st.session_state.config_financeiras.get("impostos", defaults["impostos"]), min_value=0.0, step=0.5, format="%.2f")
             with col2:
-                custos_fixos = st.number_input("Custos Fixos/Operacionais (%)", value=st.session_state.config_financeiras.get("custos_fixos", defaults["custos_fixos"]))
-                taxa_coordenacao = st.number_input("Taxa de Coordenação/GP (%)", value=st.session_state.config_financeiras.get("taxa_coordenacao", defaults["taxa_coordenacao"]))
+                custos_fixos = st.number_input("Custos Fixos/Operacionais (%)", value=st.session_state.config_financeiras.get("custos_fixos", defaults["custos_fixos"]), min_value=0.0, step=1.0, format="%.2f")
+                taxa_coordenacao = st.number_input("Taxa de Coordenação/GP (%)", value=st.session_state.config_financeiras.get("taxa_coordenacao", defaults["taxa_coordenacao"]), min_value=0.0, step=0.5, format="%.2f")
             
             submitted_configs = st.form_submit_button("Salvar Configurações Financeiras")
 
