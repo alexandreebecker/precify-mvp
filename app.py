@@ -1,5 +1,5 @@
 # ==============================================================================
-# Precify.AI MVP - Versão com Sistema de Autenticação Completo
+# Precify.AI MVP - Versão com Sistema de Autenticação (Correção do Login)
 # ==============================================================================
 
 import streamlit as st
@@ -9,12 +9,12 @@ import pandas as pd
 import json
 import time
 import datetime
-import streamlit_authenticator as stauth # Importa a biblioteca de autenticação
+import streamlit_authenticator as stauth
 
 # --- 1. CONFIGURAÇÃO DA PÁGINA (A PRIMEIRA COISA) ---
 st.set_page_config(page_title="Precify.AI", layout="centered", initial_sidebar_state="auto")
 
-# --- 2. FUNÇÃO DE CONEXÃO COM FIREBASE (A mesma que já funciona) ---
+# --- 2. FUNÇÃO DE CONEXÃO COM FIREBASE ---
 @st.cache_resource
 def initialize_firebase():
     try:
@@ -23,64 +23,54 @@ def initialize_firebase():
             firebase_admin.initialize_app(credentials.Certificate(creds_dict))
         return firestore.client()
     except Exception as e:
-        st.error(f"FALHA NA CONEXÃO COM FIREBASE. Verifique seus Secrets. Erro: {e}")
+        st.error(f"FALHA NA CONEXÃO COM FIREBASE: {e}")
         return None
 
 # --- 3. EXECUÇÃO PRINCIPAL E INICIALIZAÇÃO ---
 db = initialize_firebase()
 
 # --- 4. CONFIGURAÇÃO DO AUTENTICADOR ---
-
-# Para o autenticador, precisamos de um jeito de buscar os usuários.
-# Vamos criar funções para interagir com o Firebase Authentication.
-
-def get_all_users():
-    """Busca todos os usuários do Firebase Auth e formata para o autenticador."""
-    if not db: return {}
-    users = auth.list_users().iterate_all()
-    user_data = {
-        "usernames": {}
-    }
-    for user in users:
-        user_info = {
-            "email": user.email,
-            "name": user.display_name or user.email,
-            "password": user.password_hash # A biblioteca precisa disso, mesmo que não usemos diretamente
+# Verifica se a conexão com o banco foi bem-sucedida antes de prosseguir
+if db:
+    try:
+        users = auth.list_users().iterate_all()
+        user_data = {
+            "usernames": {
+                user.email: {
+                    "email": user.email,
+                    "name": user.display_name or user.email.split('@')[0],
+                    "password": user.password_hash
+                } for user in users
+            }
         }
-        user_data["usernames"][user.email] = user_info
-    return user_data
+    except Exception as e:
+        st.warning(f"Não foi possível buscar usuários existentes: {e}. Se for o primeiro uso, ignore.")
+        user_data = {'usernames': {}}
+else:
+    user_data = {'usernames': {}}
 
-# Carrega os dados dos usuários
-try:
-    config = get_all_users()
-except Exception as e:
-    st.warning(f"Não foi possível buscar usuários: {e}. Se for o primeiro uso, ignore.")
-    config = {'usernames': {}} # Começa vazio se der erro
-
-# Instancia o autenticador
 authenticator = stauth.Authenticate(
-    config,
-    'some_cookie_name', # Nome do cookie de sessão
-    'some_signature_key', # Chave de assinatura
+    user_data,
+    'precify_cookie',
+    'precify_signature_key',
     cookie_expiry_days=30
 )
 
 # Renderiza o widget de login/registro
-# O 'name' é o nome do usuário logado, 'authentication_status' é True/False/None
-name, authentication_status, username = authenticator.login('Login', 'main')
+# AQUI ESTÁ A CORREÇÃO: Usando 'main' como a localização
+name, authentication_status, username = authenticator.login('main')
 
 # --- 5. LÓGICA DE NAVEGAÇÃO PÓS-LOGIN ---
 
 if authentication_status:
     # SE O LOGIN FOI BEM SUCEDIDO
     st.sidebar.title(f"Bem-vindo(a), {name}!")
-    authenticator.logout('Logout', 'sidebar') # Botão de logout na sidebar
+    authenticator.logout('Logout', 'sidebar')
 
     # O RESTO DO SEU APLICATIVO VAI AQUI DENTRO
-    # (O código que já tínhamos)
+    # ... (código do app principal exatamente como antes)
     
     # ------------------ INÍCIO DO APP PRINCIPAL ------------------
-    # Funções de renderização e lógica (exatamente como antes)
     def chamar_ia_precify(briefing, tipo_projeto, canais, prazo):
         st.toast("Analisando briefing com a IA...", icon="🤖"); time.sleep(2)
         st.toast("Estimando custos...", icon="🧮"); time.sleep(1)
@@ -90,8 +80,10 @@ if authentication_status:
         if prazo and (prazo - datetime.date.today()).days < 7:
             urgencia = "Alta"; custo_base *= 1.5
         else: urgencia = "Normal"
+        # Garante que o usuário logado está sendo usado para pegar o UID
+        user_record = auth.get_user_by_email(username)
         return {
-            "data_orcamento": datetime.datetime.now(), "briefing_original": briefing, "uid": auth.get_user_by_email(username).uid,
+            "data_orcamento": datetime.datetime.now(), "briefing_original": briefing, "uid": user_record.uid,
             "input_usuario": {"tipo_projeto": tipo_projeto, "canais": canais, "prazo": str(prazo)},
             "interpretacao_ia": {"tipo_projeto_detectado": f"Projeto de {tipo_projeto}", "numero_entregas": f"{len(canais) * 3} peças", "complexidade": "Média", "nivel_urgencia": urgencia},
             "estimativa_custos": {"criação_h": 15, "texto_h": 10, "midia_h": 15, "custo_total": custo_base, "margem_aplicada": 0.0, "preco_sugerido": custo_base},
@@ -122,7 +114,6 @@ if authentication_status:
                 else: st.warning("Preencha o briefing e selecione pelo menos um canal.")
 
     def render_orcamento_gerado():
-        # ... (código da função render_orcamento_gerado exatamente como antes)
         if st.button("← Editar Briefing"): st.session_state.page = "input_briefing"; st.rerun()
         st.header("Orçamento Gerado")
         orcamento = st.session_state.get("orcamento_gerado")
@@ -154,9 +145,8 @@ if authentication_status:
 
     def render_historico():
         st.header("Histórico de Orçamentos")
-        # Busca apenas os orçamentos do usuário logado
-        user_id = auth.get_user_by_email(username).uid
-        docs = db.collection("orçamentos").where("uid", "==", user_id).order_by("data_orcamento", direction=firestore.Query.DESCENDING).stream()
+        user_record = auth.get_user_by_email(username)
+        docs = db.collection("orçamentos").where("uid", "==", user_record.uid).order_by("data_orcamento", direction=firestore.Query.DESCENDING).stream()
         orcamentos_lista = [dict(id=doc.id, **doc.to_dict()) for doc in docs]
         if orcamentos_lista:
             display_data = [{"Data": item["data_orcamento"].strftime("%d/%m/%Y"), "Projeto": item["interpretacao_ia"]["tipo_projeto_detectado"], "Preço": f"R$ {item['estimativa_custos']['preco_sugerido']:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")} for item in orcamentos_lista]
@@ -181,8 +171,11 @@ elif authentication_status == None:
     st.warning('Por favor, entre com seu usuário e senha')
 
     # Lógica de Registro de Novo Usuário
-    try:
-        if authenticator.register_user('Registrar novo usuário', preauthorization=False):
-            st.success('Usuário registrado com sucesso! Por favor, faça o login.')
-    except Exception as e:
-        st.error(e)
+    if db:
+        try:
+            if authenticator.register_user('Registrar novo usuário', preauthorization=False):
+                st.success('Usuário registrado com sucesso! Por favor, faça o login.')
+        except Exception as e:
+            st.error(e)
+    else:
+        st.error("Conexão com o banco falhou. Não é possível registrar novos usuários.")
