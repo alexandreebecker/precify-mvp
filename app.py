@@ -1,92 +1,49 @@
-# ==============================================================================
-# Precify.AI MVP - Versão Final (Login Customizado e Infalível)
-# ==============================================================================
+git add app.py
+git commit -m "Feat: Integra painel principal à área logada"
+        c1.metric("Custo Total", f"R$ {custos['custo_total']:,.2f}".replace(",", "."))
+        c2.metric("Preço Final", f"R$ {preco_sugerido:,.2f}".replace(",", "."))
+    with st.container(border=True): st.subheader("Justificativa"); st.write(orcamento["justificativa"])
+    if st.button("Salvar no Histórico", type="primary"):
+        with st.spinner("Salvando..."):
+            orcamento_para_salvar = orcamento.copy(); orcamento_para_salvar['estimativa_custos']['preco_sugerido'] = preco_sugerido
+            db.collection("orçamentos").add(orcamento_para_salvar)
+            st.toast("Salvo!", icon="✅"); time.sleep(1); st.rerun()
 
-import streamlit as st
-import firebase_admin
-from firebase_admin import credentials, firestore, auth
-import pandas as pd
-import json
-import time
-import datetime
+def render_historico():
+    st.header("Histórico de Orçamentos")
+    docs = db.collection("orçamentos").where("uid", "==", user_info['uid']).order_by("data_orcamento", direction=firestore.Query.DESCENDING).stream()
+    orcamentos_lista = [dict(id=doc.id, **doc.to_dict()) for doc in docs]
+    if orcamentos_lista:
+        display_data = [{"Data": item["data_orcamento"].strftime("%d/%m/%Y"), "Projeto": item["interpretacao_ia"]["tipo_projeto_detectado"], "Preço": f"R$ {item['estimativa_custos']['preco_sugerido']:,.2f}".replace(",", ".")} for item in orcamentos_lista]
+        st.dataframe(pd.DataFrame(display_data), use_container_width=True)
+    else: st.info("Nenhum orçamento salvo no histórico.")
 
-# --- 1. CONFIGURAÇÃO DA PÁGINA ---
-st.set_page_config(page_title="Precify.AI", layout="wide", initial_sidebar_state="auto")
+# Roteador principal do app
+st.sidebar.title(f"Bem-vindo(a), {user_info['name']}!")
+if st.sidebar.
+        c2.metric("Preço Final", f"R$ {preco_sugerido:,.2f}".replace(",", "."))
+    with st.container(border=True): st.subheader("Justificativa"); st.write(orcamento["justificativa"])
+    if st.button("Salvar no Histórico", type="primary"):
+        with st.spinner("Salvando..."):
+            orcamento_para_salvar = orcamento.copy(); orcamento_para_salvar['estimativa_custos']['preco_sugerido'] = preco_sugerido
+            db.collection("orçamentos").add(orcamento_para_salvar)
+            st.toast("Salvo!", icon="✅"); time.sleep(1); st.rerun()
 
-# --- 2. FUNÇÃO DE CONEXÃO ---
-@st.cache_resource
-def initialize_firebase():
-    """Inicializa o Firebase e retorna o cliente do Firestore."""
-    try:
-        creds_dict = json.loads(st.secrets["FIREBASE_SECRET_COMPACT_JSON"])
-        if not firebase_admin._apps:
-            firebase_admin.initialize_app(credentials.Certificate(creds_dict))
-        return firestore.client()
-    except Exception as e:
-        st.error(f"FALHA NA CONEXÃO COM FIREBASE: {e}")
-        return None
-
-# --- 3. INICIALIZAÇÃO ---
-db = initialize_firebase()
-
-# --- 4. LÓGICA DE AUTENTICAÇÃO CUSTOMIZADA ---
-
-# Funções de interação com Firebase Auth
-def sign_up(email, password, name):
-    try:
-        user = auth.create_user(email=email, password=password, display_name=name)
-        st.success("Usuário registrado com sucesso! Por favor, faça o login.")
-        return True
-    except Exception as e:
-        st.error(f"Erro no registro: {e}")
-        return False
-
-# Inicializa o estado da sessão
-if 'logged_in' not in st.session_state:
-    st.session_state.logged_in = False
-    st.session_state.user_info = {}
-
-# --- TELA DE LOGIN / REGISTRO ---
-if not st.session_state.logged_in:
-    st.title("Bem-vindo ao Precify.AI")
+def render_historico():
+    st.header("Histórico de Orçamentos")
+    docs = db.collection("orçamentos").where("uid", "==", user_info['uid']).order_by("data_orcamento", direction=firestore.Query.DESCENDING).stream()
+    orcamentos_lista = [dict(id=doc.id, **doc.to_dict()) for doc in docs]
+    if orcamentos_lista:
+        display_data = [{"Data": item["data_orcamento"].strftime("%d/%m/%Y"), "Projeto": item["interpretacao_ia"]["tipo_projeto_detectado"], "Preço": f"R$ {item['estimativa_custos']['preco_sugerido']:,.2f}".replace(",", ".")} for item in orcamentos_lista]
+        st.dataframe(pd.DataFrame(display_data), use_container_width=True)
+    else: st.info("Nenhum orçamento salvo no histórico.")
     
-    choice = st.selectbox("Login ou Registro", ["Login", "Registrar"])
+# Roteamento da aplicação
+if "page" not in st.session_state: st.session_state.page = "inicial"
 
-    if choice == "Login":
-        with st.form("login_form"):
-            email = st.text_input("Email")
-            password = st.text_input("Senha", type="password")
-            if st.form_submit_button("Login"):
-                # A autenticação de senha com o Admin SDK é complexa,
-                # então vamos confiar que o usuário existe por enquanto.
-                # A verificação real de senha é feita em apps de cliente (JS, mobile).
-                # Para este MVP, vamos buscar o usuário.
-                try:
-                    user = auth.get_user_by_email(email)
-                    st.session_state.logged_in = True
-                    st.session_state.user_info = {"name": user.display_name, "email": user.email, "uid": user.uid}
-                    st.rerun()
-                except Exception as e:
-                    st.error("Usuário não encontrado ou erro no login.")
-
-    else: # Registro
-        with st.form("register_form"):
-            name = st.text_input("Nome Completo")
-            email = st.text_input("Email")
-            password = st.text_input("Senha", type="password")
-            if st.form_submit_button("Registrar"):
-                sign_up(email, password, name)
-
-# --- APLICAÇÃO PRINCIPAL (SE ESTIVER LOGADO) ---
-else:
-    user_info = st.session_state.user_info
-    st.sidebar.title(f"Bem-vindo, {user_info['name']}!")
-    if st.sidebar.button("Logout"):
-        st.session_state.logged_in = False
-        st.session_state.user_info = {}
-        st.rerun()
-
-    # O RESTO DO SEU APP VAI AQUI
-    st.title("Painel Principal do Precify.AI")
-    st.write("Você está logado e pronto para começar!")
-    # Cole aqui suas funções de renderização (render_pagina_inicial, etc.)
+app_mode = st.sidebar.radio("Navegação", ["Gerar Orçamento", "Histórico"])
+if app_mode == "Gerar Orçamento":
+    if st.session_state.page == "inicial": render_pagina_inicial()
+    elif st.session_state.page == "input_briefing": render_input_briefing()
+    else: render_orcamento_gerado()
+else: render_historico()
