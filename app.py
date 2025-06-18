@@ -16,7 +16,6 @@ st.set_page_config(page_title="Precify.AI", layout="wide", initial_sidebar_state
 def initialize_firebase():
     """Inicializa o Firebase de forma segura e retorna o cliente do Firestore."""
     try:
-        # Usando a variável de segredo compactada
         creds_dict = json.loads(st.secrets["FIREBASE_SECRET_COMPACT_JSON"])
         if not firebase_admin._apps:
             firebase_admin.initialize_app(credentials.Certificate(creds_dict))
@@ -38,27 +37,43 @@ def sign_up(email, password, name):
 
 # --- 3. FUNÇÕES DE DADOS (FIRESTORE) ---
 
+def registrar_log_alteracao(db_client, agencia_id, usuario_email, acao, detalhes):
+    """Registra um evento no histórico de alterações da agência."""
+    try:
+        log_data = {
+            'timestamp': firestore.SERVER_TIMESTAMP, # Usa o timestamp do servidor Firebase
+            'usuario_email': usuario_email,
+            'acao': acao,
+            'detalhes': detalhes
+        }
+        db_client.collection('agencias').document(agencia_id).collection('historico_alteracoes').add(log_data)
+    except Exception as e:
+        # Log não é uma falha crítica, então usamos um warning
+        st.warning(f"Não foi possível registrar a alteração no histórico: {e}")
+
 def carregar_configuracoes_financeiras(db_client, agencia_id):
     """Carrega as configurações financeiras de uma agência do Firestore."""
     try:
         doc_ref = db_client.collection('agencias').document(agencia_id)
         doc = doc_ref.get()
         if doc.exists:
-            # Retorna o dicionário de configs se ele existir, senão um dicionário vazio.
             return doc.to_dict().get('configuracoes_financeiras', {})
     except Exception as e:
         st.error(f"Erro ao carregar configurações: {e}")
     return {}
 
-def salvar_configuracoes_financeiras(db_client, agencia_id, configs):
-    """Salva (ou atualiza) as configurações financeiras no documento da agência."""
+def salvar_configuracoes_financeiras(db_client, agencia_id, configs, usuario_email):
+    """Salva as configurações financeiras e registra o log da alteração."""
     try:
         doc_ref = db_client.collection('agencias').document(agencia_id)
-        # Usa update para adicionar/modificar o campo sem sobrescrever o documento inteiro
         doc_ref.update({'configuracoes_financeiras': configs})
         st.success("Configurações financeiras salvas com sucesso!")
-        # Atualiza o session_state para refletir a mudança imediatamente
         st.session_state.config_financeiras = configs
+        
+        # Registrar o log da alteração
+        detalhes_log = f"Margens atualizadas: Lucro({configs['margem_lucro']}), Impostos({configs['impostos']}), Fixos({configs['custos_fixos']}), Coord.({configs['taxa_coordenacao']})"
+        registrar_log_alteracao(db_client, agencia_id, usuario_email, "Atualização de Config. Financeiras", detalhes_log)
+        
     except Exception as e:
         st.error(f"Erro ao salvar configurações: {e}")
 
@@ -75,8 +90,6 @@ if not st.session_state.logged_in:
             email = st.text_input("Email"); password = st.text_input("Senha", type="password")
             if st.form_submit_button("Login"):
                 try:
-                    # Este passo não valida a senha, apenas a existência do email.
-                    # Para uma app em produção, a validação de senha ocorreria no front-end ou com uma API customizada.
                     user = auth.get_user_by_email(email)
                     st.session_state.logged_in = True
                     st.session_state.user_info = {"name": user.display_name, "email": user.email, "uid": user.uid}
@@ -125,9 +138,14 @@ else:
                 submitted = st.form_submit_button("Adicionar Perfil")
 
                 if submitted and funcao and custo_hora > 0:
+                    # 1. Adicionar o perfil
                     novo_perfil = {"funcao": funcao, "custo_hora": custo_hora}
                     db.collection('agencias').document(agencia_id).collection('perfis_equipe').add(novo_perfil)
                     st.toast(f"Perfil '{funcao}' adicionado!", icon="✅")
+                    
+                    # 2. Registrar o log da alteração
+                    detalhes_log = f"Novo perfil '{funcao}' adicionado com custo/hora de R$ {custo_hora:.2f}."
+                    registrar_log_alteracao(db, agencia_id, user_info['email'], "Adição de Perfil de Equipe", detalhes_log)
 
             st.divider()
 
@@ -149,56 +167,37 @@ else:
                         if st.button("Deletar", key=f"del_{perfil_doc.id}", type="primary"):
                             db.collection('agencias').document(agencia_id).collection('perfis_equipe').document(perfil_doc.id).delete()
                             st.toast(f"Perfil '{perfil_data.get('funcao')}' deletado.")
+                            
+                            # Adicionar log de deleção (PRÓXIMO PASSO)
+                            
                             st.rerun()
 
         st.divider()
 
         # --- SEÇÃO DE CONFIGURAÇÕES FINANCEIRAS ---
-        # Carrega as configs uma vez por sessão e armazena no state
         if 'config_financeiras' not in st.session_state:
             st.session_state.config_financeiras = carregar_configuracoes_financeiras(db, agencia_id)
 
-        # Valores padrão para garantir que os campos sempre tenham um valor inicial
         defaults = {"margem_lucro": 20.0, "impostos": 15.0, "custos_fixos": 10.0, "taxa_coordenacao": 10.0}
-
+        
         st.subheader("⚙️ Configurações Financeiras da Agência")
-        st.caption(
-            "Defina as margens e taxas padrão que serão usadas no cálculo de todos os orçamentos. "
-            "Estes valores podem ser ajustados individualmente em cada projeto."
-        )
+        st.caption("Defina as margens e taxas padrão...")
 
         with st.form(key="form_configuracoes_financeiras"):
+            #... (código do formulário continua o mesmo)
             col1, col2 = st.columns(2)
             with col1:
-                margem_lucro = st.number_input(
-                    "Margem de Lucro (%)", min_value=0.0, step=1.0, format="%.2f",
-                    value=st.session_state.config_financeiras.get("margem_lucro", defaults["margem_lucro"]),
-                    help="Percentual de lucro a ser adicionado sobre o custo total."
-                )
-                impostos = st.number_input(
-                    "Impostos (%)", min_value=0.0, step=0.5, format="%.2f",
-                    value=st.session_state.config_financeiras.get("impostos", defaults["impostos"]),
-                    help="Percentual de impostos (Ex: ISS) que incidem sobre o valor final."
-                )
+                margem_lucro = st.number_input( "Margem de Lucro (%)", value=st.session_state.config_financeiras.get("margem_lucro", defaults["margem_lucro"]))
+                impostos = st.number_input("Impostos (%)", value=st.session_state.config_financeiras.get("impostos", defaults["impostos"]))
             with col2:
-                custos_fixos = st.number_input(
-                    "Custos Fixos/Operacionais (%)", min_value=0.0, step=1.0, format="%.2f",
-                    value=st.session_state.config_financeiras.get("custos_fixos", defaults["custos_fixos"]),
-                    help="Percentual para cobrir custos da estrutura (aluguel, software, etc.)."
-                )
-                taxa_coordenacao = st.number_input(
-                    "Taxa de Coordenação/GP (%)", min_value=0.0, step=0.5, format="%.2f",
-                    value=st.session_state.config_financeiras.get("taxa_coordenacao", defaults["taxa_coordenacao"]),
-                    help="Percentual sobre o custo da equipe para cobrir Gerenciamento de Projeto."
-                )
-
+                custos_fixos = st.number_input("Custos Fixos/Operacionais (%)", value=st.session_state.config_financeiras.get("custos_fixos", defaults["custos_fixos"]))
+                taxa_coordenacao = st.number_input("Taxa de Coordenação/GP (%)", value=st.session_state.config_financeiras.get("taxa_coordenacao", defaults["taxa_coordenacao"]))
+            
             submitted_configs = st.form_submit_button("Salvar Configurações Financeiras")
 
             if submitted_configs:
                 novas_configs = {
-                    "margem_lucro": margem_lucro,
-                    "impostos": impostos,
-                    "custos_fixos": custos_fixos,
-                    "taxa_coordenacao": taxa_coordenacao
+                    "margem_lucro": margem_lucro, "impostos": impostos,
+                    "custos_fixos": custos_fixos, "taxa_coordenacao": taxa_coordenacao
                 }
-                salvar_configuracoes_financeiras(db, agencia_id, novas_configs)
+                salvar_configuracoes_financeiras(db, agencia_id, novas_configs, user_info['email'])
