@@ -41,7 +41,7 @@ def registrar_log_alteracao(db_client, agencia_id, usuario_email, acao, detalhes
     """Registra um evento no histórico de alterações da agência."""
     try:
         log_data = {
-            'timestamp': firestore.SERVER_TIMESTAMP, # Usa o timestamp do servidor Firebase
+            'timestamp': firestore.SERVER_TIMESTAMP,
             'usuario_email': usuario_email,
             'acao': acao,
             'detalhes': detalhes
@@ -49,6 +49,19 @@ def registrar_log_alteracao(db_client, agencia_id, usuario_email, acao, detalhes
         db_client.collection('agencias').document(agencia_id).collection('historico_alteracoes').add(log_data)
     except Exception as e:
         st.warning(f"Não foi possível registrar a alteração no histórico: {e}")
+
+def carregar_historico(db_client, agencia_id, limit=20):
+    """Carrega as últimas N alterações do histórico da agência, ordenadas pela data."""
+    try:
+        historico_ref = (db_client.collection('agencias').document(agencia_id)
+                         .collection('historico_alteracoes')
+                         .order_by('timestamp', direction=firestore.Query.DESCENDING)
+                         .limit(limit)
+                         .stream())
+        return list(historico_ref)
+    except Exception as e:
+        st.warning(f"Não foi possível carregar o histórico: {e}")
+        return []
 
 def carregar_configuracoes_financeiras(db_client, agencia_id):
     """Carrega as configurações financeiras de uma agência do Firestore."""
@@ -69,11 +82,9 @@ def salvar_configuracoes_financeiras(db_client, agencia_id, configs, usuario_ema
         st.success("Configurações financeiras salvas com sucesso!")
         st.session_state.config_financeiras = configs
         
-        # Registrar o log da alteração
         detalhes_log = (f"Margens atualizadas: Lucro({configs['margem_lucro']}), Impostos({configs['impostos']}), "
                         f"Fixos({configs['custos_fixos']}), Coord.({configs['taxa_coordenacao']})")
         registrar_log_alteracao(db_client, agencia_id, usuario_email, "Atualização de Config. Financeiras", detalhes_log)
-        
     except Exception as e:
         st.error(f"Erro ao salvar configurações: {e}")
 
@@ -130,6 +141,7 @@ else:
 
         # --- SEÇÃO CRUD PERFIS DE EQUIPE ---
         with st.expander("Gerenciar Perfis de Equipe", expanded=True):
+            # ... (código do CRUD de perfis, já com logs)
             st.subheader("Adicionar Novo Perfil")
             with st.form("new_profile_form", clear_on_submit=True):
                 col1, col2 = st.columns([2, 1])
@@ -141,7 +153,6 @@ else:
                     novo_perfil = {"funcao": funcao, "custo_hora": custo_hora}
                     db.collection('agencias').document(agencia_id).collection('perfis_equipe').add(novo_perfil)
                     st.toast(f"Perfil '{funcao}' adicionado!", icon="✅")
-                    
                     detalhes_log = f"Novo perfil '{funcao}' adicionado com custo/hora de R$ {custo_hora:.2f}."
                     registrar_log_alteracao(db, agencia_id, user_info['email'], "Adição de Perfil", detalhes_log)
             st.divider()
@@ -165,8 +176,6 @@ else:
                             funcao_deletada = perfil_data.get('funcao', 'Desconhecido')
                             db.collection('agencias').document(agencia_id).collection('perfis_equipe').document(perfil_doc.id).delete()
                             st.toast(f"Perfil '{funcao_deletada}' deletado.")
-                            
-                            # Registrar o log da deleção
                             detalhes_log = f"O perfil '{funcao_deletada}' foi removido."
                             registrar_log_alteracao(db, agencia_id, user_info['email'], "Deleção de Perfil", detalhes_log)
                             st.rerun()
@@ -174,14 +183,12 @@ else:
         st.divider()
 
         # --- SEÇÃO DE CONFIGURAÇÕES FINANCEIRAS ---
+        # ... (código das configs financeiras, já com logs)
         if 'config_financeiras' not in st.session_state:
             st.session_state.config_financeiras = carregar_configuracoes_financeiras(db, agencia_id)
-
         defaults = {"margem_lucro": 20.0, "impostos": 15.0, "custos_fixos": 10.0, "taxa_coordenacao": 10.0}
-        
         st.subheader("⚙️ Configurações Financeiras da Agência")
         st.caption("Defina as margens e taxas padrão.")
-
         with st.form(key="form_configuracoes_financeiras"):
             col1, col2 = st.columns(2)
             with col1:
@@ -190,12 +197,37 @@ else:
             with col2:
                 custos_fixos = st.number_input("Custos Fixos/Operacionais (%)", value=st.session_state.config_financeiras.get("custos_fixos", defaults["custos_fixos"]), min_value=0.0, step=1.0, format="%.2f")
                 taxa_coordenacao = st.number_input("Taxa de Coordenação/GP (%)", value=st.session_state.config_financeiras.get("taxa_coordenacao", defaults["taxa_coordenacao"]), min_value=0.0, step=0.5, format="%.2f")
-            
             submitted_configs = st.form_submit_button("Salvar Configurações Financeiras")
-
             if submitted_configs:
-                novas_configs = {
-                    "margem_lucro": margem_lucro, "impostos": impostos,
-                    "custos_fixos": custos_fixos, "taxa_coordenacao": taxa_coordenacao
-                }
+                novas_configs = {"margem_lucro": margem_lucro, "impostos": impostos, "custos_fixos": custos_fixos, "taxa_coordenacao": taxa_coordenacao}
                 salvar_configuracoes_financeiras(db, agencia_id, novas_configs, user_info['email'])
+                st.rerun()
+
+        st.divider()
+
+        # --- NOVA SEÇÃO: HISTÓRICO DE ALTERAÇÕES ---
+        st.subheader("📜 Histórico de Alterações")
+        st.caption("Exibe as últimas 20 alterações realizadas nas configurações.")
+
+        historico_logs = carregar_historico(db, agencia_id)
+
+        if not historico_logs:
+            st.info("Nenhuma alteração registrada ainda. As novas alterações aparecerão aqui.")
+        else:
+            for log_doc in historico_logs:
+                log_data = log_doc.to_dict()
+                timestamp = log_data.get('timestamp')
+                
+                # O timestamp pode ser nulo por um breve momento antes do servidor preenchê-lo
+                if timestamp:
+                    # Adicionado fuso horário de São Paulo para consistência
+                    data_hora = timestamp.astimezone(pd.Timestamp.now().tz).strftime('%d/%m/%Y às %H:%M')
+                else:
+                    data_hora = "Registrando..."
+
+                usuario = log_data.get('usuario_email', 'N/A')
+                acao = log_data.get('acao', 'N/A')
+                detalhes = log_data.get('detalhes', 'Sem detalhes.')
+
+                with st.expander(f"**{data_hora}** | **{acao}** por *{usuario}*"):
+                    st.write(detalhes)
