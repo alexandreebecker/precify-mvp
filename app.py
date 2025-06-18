@@ -1,5 +1,5 @@
 # ==============================================================================
-# Precify.AI MVP - Versão com Sistema de Autenticação (Correção do Login)
+# Precify.AI MVP - Versão com Sistema de Autenticação (Correção Final do Login)
 # ==============================================================================
 
 import streamlit as st
@@ -30,7 +30,6 @@ def initialize_firebase():
 db = initialize_firebase()
 
 # --- 4. CONFIGURAÇÃO DO AUTENTICADOR ---
-# Verifica se a conexão com o banco foi bem-sucedida antes de prosseguir
 if db:
     try:
         users = auth.list_users().iterate_all()
@@ -39,26 +38,25 @@ if db:
                 user.email: {
                     "email": user.email,
                     "name": user.display_name or user.email.split('@')[0],
-                    "password": user.password_hash
-                } for user in users
+                    "password": user.password_hash # Essencial para a biblioteca funcionar
+                } for user in users if user.password_hash # Apenas usuários com senha
             }
         }
     except Exception as e:
-        st.warning(f"Não foi possível buscar usuários existentes: {e}. Se for o primeiro uso, ignore.")
+        st.warning(f"Não foi possível buscar usuários: {e}.")
         user_data = {'usernames': {}}
 else:
     user_data = {'usernames': {}}
 
 authenticator = stauth.Authenticate(
     user_data,
-    'precify_cookie',
-    'precify_signature_key',
+    'precify_cookie_v2',
+    'precify_signature_key_v2',
     cookie_expiry_days=30
 )
 
-# Renderiza o widget de login/registro
-# AQUI ESTÁ A CORREÇÃO: Usando 'main' como a localização
-name, authentication_status, username = authenticator.login('main')
+# AQUI ESTÁ A CORREÇÃO: Restaurando o primeiro argumento 'Login'
+name, authentication_status, username = authenticator.login('Login', 'main')
 
 # --- 5. LÓGICA DE NAVEGAÇÃO PÓS-LOGIN ---
 
@@ -70,7 +68,6 @@ if authentication_status:
     # O RESTO DO SEU APLICATIVO VAI AQUI DENTRO
     # ... (código do app principal exatamente como antes)
     
-    # ------------------ INÍCIO DO APP PRINCIPAL ------------------
     def chamar_ia_precify(briefing, tipo_projeto, canais, prazo):
         st.toast("Analisando briefing com a IA...", icon="🤖"); time.sleep(2)
         st.toast("Estimando custos...", icon="🧮"); time.sleep(1)
@@ -80,7 +77,6 @@ if authentication_status:
         if prazo and (prazo - datetime.date.today()).days < 7:
             urgencia = "Alta"; custo_base *= 1.5
         else: urgencia = "Normal"
-        # Garante que o usuário logado está sendo usado para pegar o UID
         user_record = auth.get_user_by_email(username)
         return {
             "data_orcamento": datetime.datetime.now(), "briefing_original": briefing, "uid": user_record.uid,
@@ -163,7 +159,6 @@ if authentication_status:
         elif st.session_state.page == "input_briefing": render_input_briefing()
         elif st.session_state.page == "orcamento_gerado": render_orcamento_gerado()
     else: render_historico()
-    # ------------------ FIM DO APP PRINCIPAL ------------------
 
 elif authentication_status == False:
     st.error('Usuário/senha incorreto')
@@ -174,8 +169,13 @@ elif authentication_status == None:
     if db:
         try:
             if authenticator.register_user('Registrar novo usuário', preauthorization=False):
+                # Cria o usuário no Firebase Authentication
+                email = st.session_state['email']
+                name = st.session_state['name']
+                password = st.session_state['password']
+                user = auth.create_user(email=email, password=password, display_name=name)
                 st.success('Usuário registrado com sucesso! Por favor, faça o login.')
         except Exception as e:
             st.error(e)
     else:
-        st.error("Conexão com o banco falhou. Não é possível registrar novos usuários.")
+        st.error("Conexão com o banco falhou. Não é possível registrar.")
