@@ -1,5 +1,5 @@
 # ==============================================================================
-# Precify.AI - Sprint 2: Versão Final com Correção de UI no Histórico
+# Precify.AI - SPRINT 2 - VERSÃO FINAL, COMPLETA E ESTÁVEL
 # ==============================================================================
 
 import streamlit as st
@@ -144,6 +144,7 @@ def carregar_orcamentos(_db, agencia_id):
 def salvar_orcamento_firestore(_db, agencia_id, user, dados):
     try:
         _db.collection('orçamentos').add({"agencia_id": agencia_id, "uid_criador": user['uid'], "email_criador": user['email'], "data_orcamento": firestore.SERVER_TIMESTAMP, **dados})
+        st.cache_data.clear() # Limpa o cache para que o novo orçamento apareça na lista
         return True
     except Exception as e: st.error(f"Falha ao salvar: {e}"); return False
 
@@ -181,11 +182,22 @@ else:
     st.sidebar.divider()
     
     if 'current_view' not in st.session_state: st.session_state.current_view = "Painel Principal"
-    view = st.sidebar.radio("Menu", ["Painel Principal", "Novo Orçamento", "Meus Orçamentos", "Configurações"], key="navigation")
+    view_options = ["Painel Principal", "Novo Orçamento", "Meus Orçamentos", "Configurações"]
     
-    if st.session_state.current_view=="Novo Orçamento" and view!="Novo Orçamento":
-        for k in [k for k in st.session_state if k.startswith(('orcamento_', 'dados_briefing', 'entregaveis'))]: del st.session_state[k]
-    st.session_state.current_view = view
+    # Redireciona para Meus Orçamentos após salvar
+    if st.session_state.get('redirect_to_orcamentos', False):
+        st.session_state.current_view = "Meus Orçamentos"
+        del st.session_state.redirect_to_orcamentos
+
+    current_index = view_options.index(st.session_state.current_view)
+    view = st.sidebar.radio("Menu", view_options, index=current_index, key="navigation")
+    
+    if view != st.session_state.current_view:
+        st.session_state.current_view = view
+        # Limpa o fluxo de orçamento se o usuário navegar para fora
+        if view != "Novo Orçamento":
+            for k in [k for k in st.session_state if k.startswith('orcamento_')]: del st.session_state[k]
+        st.rerun()
 
     if view == "Painel Principal":
         st.header("Painel Principal"); st.write("Em breve.")
@@ -203,16 +215,14 @@ else:
                     st.subheader("Detalhes do Orçamento")
                     st.markdown(f"**Custo Equipe:** `R$ {res.get('custo_total_equipe', 0):.2f}` | **Tx. Coordenação:** `R$ {res.get('valor_taxa_coordenacao', 0):.2f}` | **Custos Fixos:** `R$ {res.get('valor_custos_fixos', 0):.2f}` | **Lucro:** `R$ {res.get('valor_lucro', 0):.2f}` | **Impostos:** `R$ {res.get('valor_impostos', 0):.2f}`")
                     st.subheader("Escopo Final")
-                    # --- CORREÇÃO APLICADA AQUI ---
-                    for item in orc_data.get('escopo_final', []):
-                        st.write(f"- {item['descricao']}")
-                    # ---------------------------------
-                    st.subheader("Dados do Briefing"); st.json(orc_data.get('briefing', {}))
+                    for item in orc_data.get('escopo_final', []): st.write(f"- {item['descricao']}")
+                    st.subheader("Dados do Briefing")
+                    briefing_dict = orc_data.get('briefing', {})
+                    for key, value in briefing_dict.items(): st.markdown(f"**{key.replace('_', ' ').title()}:** {value}")
 
     elif view == "Novo Orçamento":
         if 'orcamento_step' not in st.session_state: st.session_state.orcamento_step = 1
         
-        # O código completo e funcional das etapas 1 a 6 permanece aqui, sem alterações.
         if st.session_state.orcamento_step == 1:
             st.header("🚀 Iniciar Novo Orçamento"); cat = st.selectbox("Tipo de Campanha", ["Selecione...","Campanha Online","Campanha Offline","Campanha 360","Projeto Estratégico"])
             if st.button("Iniciar", disabled=(cat=="Selecione...")): st.session_state.orcamento_categoria=cat; st.session_state.orcamento_step=2; st.rerun()
@@ -271,14 +281,8 @@ else:
             if c1.button("⬅️ Editar Alocação"): st.session_state.orcamento_step=4; st.rerun()
             if c2.button("Salvar Orçamento ✅",type="primary",use_container_width=True,disabled=not nome_cliente):
                 dados = {"nome_cliente": nome_cliente, "briefing": st.session_state.dados_briefing, "escopo_final": st.session_state.entregaveis, "resultado_financeiro": resultado}
-                if salvar_orcamento_firestore(db, agencia_id, user_info, dados): st.session_state.orcamento_step=6; st.rerun()
-
-        elif st.session_state.orcamento_step == 6:
-            st.balloons(); st.success("Orçamento salvo!");
-            if st.button("Ver Orçamentos Salvos"): st.session_state.current_view = "Meus Orçamentos"; st.rerun()
-            if st.button("Gerar Novo Orçamento"):
-                for k in [k for k in st.session_state if k.startswith(('orcamento_','dados_briefing','entregaveis'))]: del st.session_state[k]
-                st.session_state.orcamento_step = 1; st.rerun()
+                if salvar_orcamento_firestore(db, agencia_id, user_info, dados):
+                    st.session_state.redirect_to_orcamentos = True; st.rerun()
 
     elif view == "Configurações":
         st.header("Painel de Configuração da Agência"); agencia_id = user_info['uid']
