@@ -1,5 +1,5 @@
 # ==============================================================================
-# Precify.AI MVP - Versão da Vitória (Lógica de Autenticação Infalível)
+# Precify.AI MVP - Versão com Chamadas Padrão do Autenticador
 # ==============================================================================
 
 import streamlit as st
@@ -34,6 +34,7 @@ db = initialize_firebase()
 users_config = {'usernames': {}}
 if db:
     try:
+        # Busca os usuários do Firebase para popular o autenticador
         users = auth.list_users().iterate_all()
         for user in users:
             if user.password_hash:
@@ -46,25 +47,22 @@ if db:
         st.warning(f"Não foi possível buscar usuários: {e}.")
 
 authenticator = stauth.Authenticate(
-    users_config, 'precify_cookie_v7', 'precify_key_v7', 30
+    users_config, 'precify_cookie_v8', 'precify_key_v8', 30
 )
 
-# --- 5. LÓGICA DE LOGIN/REGISTRO (INFALÍVEL) ---
+# --- 5. LÓGICA DE LOGIN/REGISTRO (USANDO VALORES PADRÃO) ---
 
-# Renderiza o formulário de login.
-authenticator.login('Login', 'main')
+# CORREÇÃO: Chamando a função de login da forma mais simples possível.
+name, authentication_status, username = authenticator.login()
 
-# Verifica o estado da autenticação a partir do st.session_state
-if st.session_state["authentication_status"]:
+if authentication_status:
     # --- APP PRINCIPAL (QUANDO O USUÁRIO ESTÁ LOGADO) ---
-    name = st.session_state["name"]
-    username = st.session_state["username"]
-    
     st.sidebar.title(f"Bem-vindo, {name}!")
-    authenticator.logout('Logout', 'sidebar')
+    # CORREÇÃO: Chamando logout da forma mais simples
+    authenticator.logout()
 
-    # O RESTO DO SEU APLICATIVO VAI AQUI DENTRO
-    # ... (código do app principal exatamente como antes)
+    # O resto do seu aplicativo (funções de renderização, etc.) vai aqui.
+    # Esta parte não precisa de alteração.
     
     def chamar_ia_precify(briefing, tipo_projeto, canais, prazo):
         st.toast("Analisando briefing...", icon="🤖"); time.sleep(1)
@@ -107,9 +105,9 @@ if st.session_state["authentication_status"]:
         orcamento = st.session_state.get("orcamento_gerado")
         if not orcamento: return st.error("Erro ao gerar orçamento.")
         interpretacao = orcamento["interpretacao_ia"]; custos = orcamento["estimativa_custos"]
-        with st.container(border=True): st.subheader("Interpretação do Briefing"); c1, c2 = st.columns(2); c1.metric("Tipo", interpretacao["tipo_projeto_detectado"]); c2.metric("Entregas", interpretacao["numero_entregas"])
+        with st.container(border=True): st.subheader("Interpretação"); c1, c2 = st.columns(2); c1.metric("Tipo", interpretacao["tipo_projeto_detectado"]); c2.metric("Entregas", interpretacao["numero_entregas"])
         with st.container(border=True):
-            st.subheader("Estimativa de Custos")
+            st.subheader("Custos")
             margem = st.slider("Margem (%)", 0, 100, int(custos["margem_aplicada"]))
             preco_sugerido = custos["custo_total"] * (1 + margem / 100)
             c1, c2 = st.columns(2)
@@ -138,29 +136,23 @@ if st.session_state["authentication_status"]:
         else: render_orcamento_gerado()
     else: render_historico()
 
-elif st.session_state["authentication_status"] is False:
+
+elif authentication_status is False:
     st.error('Usuário ou senha incorreto(a)')
-elif st.session_state["authentication_status"] is None:
+
+elif authentication_status is None:
     st.warning('Por favor, faça o login para continuar.')
-    # LÓGICA DE REGISTRO (CUSTOMIZADA E ROBUSTA)
-    with st.expander("Não tem uma conta? Registre-se aqui"):
-        with st.form("register_form"):
-            new_email = st.text_input("Email")
-            new_name = st.text_input("Nome")
-            new_password = st.text_input("Senha", type="password")
-            confirm_password = st.text_input("Confirmar Senha", type="password")
+    
+    # Lógica de Registro (Simplificada)
+    try:
+        # CORREÇÃO: Chamando o registro da forma mais simples
+        if authenticator.register_user():
+            email = st.session_state['email']
+            name = st.session_state['name']
+            password = st.session_state['password']
             
-            if st.form_submit_button("Registrar"):
-                if new_password == confirm_password:
-                    try:
-                        user = auth.create_user(
-                            email=new_email,
-                            password=new_password,
-                            display_name=new_name
-                        )
-                        st.success("Usuário registrado com sucesso! Por favor, recarregue a página e faça o login.")
-                        st.balloons()
-                    except Exception as e:
-                        st.error(f"Erro ao registrar: {e}")
-                else:
-                    st.error("As senhas não coincidem.")
+            # Cria o usuário no Firebase Authentication
+            user = auth.create_user(email=email, password=password, display_name=name)
+            st.success('Usuário registrado com sucesso! Por favor, recarregue a página e faça o login.')
+    except Exception as e:
+        st.error(e)
