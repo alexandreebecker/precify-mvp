@@ -1,6 +1,6 @@
 # ==============================================================================
 # Precify MVP - Painel de Precificação com Streamlit e Firebase
-# VERSÃO FINAL SIMPLIFICADA E ROBUSTA
+# VERSÃO DA VITÓRIA - A CORREÇÃO FINAL
 # ==============================================================================
 
 # --- 1. Importações de Bibliotecas ---
@@ -15,18 +15,22 @@ import json
 from streamlit.connections import ExperimentalBaseConnection
 from streamlit.runtime.caching import cache_resource
 
-# --- 2. Configuração da Conexão com Firebase (Método Simplificado) ---
+# --- 2. Configuração da Conexão com Firebase (Método Final) ---
 
 class FirebaseConnection(ExperimentalBaseConnection[firestore.Client]):
     def _connect(self, **kwargs) -> firestore.Client:
-        # LÓGICA DE CONEXÃO SIMPLIFICADA E À PROVA DE FALHAS
         creds = None
         
-        # Tenta carregar dos segredos do Streamlit primeiro (para deploy)
+        # Tenta carregar dos segredos do Streamlit (para deploy)
         if "FIREBASE_SECRETS_JSON" in st.secrets:
             try:
                 creds_string = st.secrets["FIREBASE_SECRETS_JSON"]
-                creds_dict = json.loads(creds_string)
+                
+                # AQUI ESTÁ A LINHA DE CÓDIGO MAIS IMPORTANTE DE TODAS:
+                # "Conserta" a string da chave privada antes de fazer o parse do JSON.
+                # Isso substitui as quebras de linha reais pela sua forma de texto.
+                creds_dict = json.loads(creds_string.replace('\n', '\\n'))
+                
                 creds = credentials.Certificate(creds_dict)
             except Exception as e:
                 st.error(f"Erro ao processar o segredo FIREBASE_SECRETS_JSON: {e}")
@@ -42,7 +46,6 @@ class FirebaseConnection(ExperimentalBaseConnection[firestore.Client]):
                 st.error(f"Credenciais locais do Firebase não encontradas: {e}")
                 return None
         
-        # Inicializa o app do Firebase se ainda não foi inicializado
         if not firebase_admin._apps:
             firebase_admin.initialize_app(creds)
         
