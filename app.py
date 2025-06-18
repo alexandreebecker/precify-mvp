@@ -1,5 +1,5 @@
 # ==============================================================================
-# Precify.AI - Sprint 2: Versão Final, Completa e Corrigida
+# Precify.AI - Sprint 2: Versão Final com Correção de UI no Histórico
 # ==============================================================================
 
 import streamlit as st
@@ -139,10 +139,7 @@ def carregar_orcamentos(_db, agencia_id):
     try:
         orc_ref = _db.collection('orçamentos').where('agencia_id', '==', agencia_id).order_by('data_orcamento', direction=firestore.Query.DESCENDING).stream()
         return [doc.to_dict() for doc in orc_ref]
-    except Exception as e:
-        # Não mostra o erro para o usuário final, pois o índice pode estar sendo criado.
-        # O ideal seria um tratamento mais robusto, mas isso evita que o app quebre.
-        return []
+    except Exception as e: return []
 
 def salvar_orcamento_firestore(_db, agencia_id, user, dados):
     try:
@@ -205,12 +202,17 @@ else:
                 with st.expander(f"**{orc_data.get('nome_cliente', 'N/A')}** | {data_formatada} | **R$ {res.get('valor_total_cliente', 0):.2f}**"):
                     st.subheader("Detalhes do Orçamento")
                     st.markdown(f"**Custo Equipe:** `R$ {res.get('custo_total_equipe', 0):.2f}` | **Tx. Coordenação:** `R$ {res.get('valor_taxa_coordenacao', 0):.2f}` | **Custos Fixos:** `R$ {res.get('valor_custos_fixos', 0):.2f}` | **Lucro:** `R$ {res.get('valor_lucro', 0):.2f}` | **Impostos:** `R$ {res.get('valor_impostos', 0):.2f}`")
-                    st.subheader("Escopo Final"); [st.write(f"- {item['descricao']}") for item in orc_data.get('escopo_final', [])]
+                    st.subheader("Escopo Final")
+                    # --- CORREÇÃO APLICADA AQUI ---
+                    for item in orc_data.get('escopo_final', []):
+                        st.write(f"- {item['descricao']}")
+                    # ---------------------------------
                     st.subheader("Dados do Briefing"); st.json(orc_data.get('briefing', {}))
 
     elif view == "Novo Orçamento":
         if 'orcamento_step' not in st.session_state: st.session_state.orcamento_step = 1
         
+        # O código completo e funcional das etapas 1 a 6 permanece aqui, sem alterações.
         if st.session_state.orcamento_step == 1:
             st.header("🚀 Iniciar Novo Orçamento"); cat = st.selectbox("Tipo de Campanha", ["Selecione...","Campanha Online","Campanha Offline","Campanha 360","Projeto Estratégico"])
             if st.button("Iniciar", disabled=(cat=="Selecione...")): st.session_state.orcamento_categoria=cat; st.session_state.orcamento_step=2; st.rerun()
