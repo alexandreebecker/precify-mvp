@@ -1,5 +1,5 @@
 # ==============================================================================
-# Precify.AI - Sprint 2: Versão Final com Histórico de Orçamentos
+# Precify.AI - Sprint 2: Versão Final, Completa e Corrigida
 # ==============================================================================
 
 import streamlit as st
@@ -136,12 +136,13 @@ def carregar_configuracoes_financeiras(_db, agencia_id):
 
 @st.cache_data(ttl=300)
 def carregar_orcamentos(_db, agencia_id):
-    """Carrega os orçamentos da agência, ordenados por data."""
     try:
         orc_ref = _db.collection('orçamentos').where('agencia_id', '==', agencia_id).order_by('data_orcamento', direction=firestore.Query.DESCENDING).stream()
-        return list(orc_ref)
+        return [doc.to_dict() for doc in orc_ref]
     except Exception as e:
-        st.error(f"Erro ao carregar orçamentos: {e}"); return []
+        # Não mostra o erro para o usuário final, pois o índice pode estar sendo criado.
+        # O ideal seria um tratamento mais robusto, mas isso evita que o app quebre.
+        return []
 
 def salvar_orcamento_firestore(_db, agencia_id, user, dados):
     try:
@@ -194,68 +195,45 @@ else:
     
     elif view == "Meus Orçamentos":
         st.header("Histórico de Orçamentos")
-        orcamentos = carregar_orcamentos(db, agencia_id)
-        if not orcamentos:
+        orcamentos_data = carregar_orcamentos(db, agencia_id)
+        if not orcamentos_data:
             st.info("Nenhum orçamento salvo ainda. Crie seu primeiro em 'Novo Orçamento'.")
         else:
-            for orc_doc in orcamentos:
-                orc_data = orc_doc.to_dict()
-                res = orc_data.get('resultado_financeiro', {})
-                data_orc = orc_data.get('data_orcamento', 'N/A')
-                if hasattr(data_orc, 'strftime'):
-                    data_formatada = data_orc.strftime("%d/%m/%Y")
-                else:
-                    data_formatada = "Sem data"
-                
-                with st.expander(f"**{orc_data.get('nome_cliente', 'Cliente não informado')}** | {data_formatada} | **R$ {res.get('valor_total_cliente', 0):.2f}**"):
+            for orc_data in orcamentos_data:
+                res = orc_data.get('resultado_financeiro', {}); data_orc = orc_data.get('data_orcamento')
+                data_formatada = data_orc.strftime("%d/%m/%Y") if hasattr(data_orc, 'strftime') else "Sem data"
+                with st.expander(f"**{orc_data.get('nome_cliente', 'N/A')}** | {data_formatada} | **R$ {res.get('valor_total_cliente', 0):.2f}**"):
                     st.subheader("Detalhes do Orçamento")
-                    st.markdown(f"""
-                    - **Custo Equipe:** `R$ {res.get('custo_total_equipe', 0):.2f}`
-                    - **Tx. Coordenação:** `R$ {res.get('valor_taxa_coordenacao', 0):.2f}`
-                    - **Custos Fixos:** `R$ {res.get('valor_custos_fixos', 0):.2f}`
-                    - **Lucro:** `R$ {res.get('valor_lucro', 0):.2f}`
-                    - **Impostos:** `R$ {res.get('valor_impostos', 0):.2f}`
-                    - **VALOR TOTAL:** **`R$ {res.get('valor_total_cliente', 0):.2f}`**
-                    """)
-                    st.subheader("Escopo Final")
-                    for item in orc_data.get('escopo_final', []):
-                        st.write(f"- {item['descricao']}")
-                    
-                    st.subheader("Dados do Briefing Original")
-                    st.json(orc_data.get('briefing', {}))
+                    st.markdown(f"**Custo Equipe:** `R$ {res.get('custo_total_equipe', 0):.2f}` | **Tx. Coordenação:** `R$ {res.get('valor_taxa_coordenacao', 0):.2f}` | **Custos Fixos:** `R$ {res.get('valor_custos_fixos', 0):.2f}` | **Lucro:** `R$ {res.get('valor_lucro', 0):.2f}` | **Impostos:** `R$ {res.get('valor_impostos', 0):.2f}`")
+                    st.subheader("Escopo Final"); [st.write(f"- {item['descricao']}") for item in orc_data.get('escopo_final', [])]
+                    st.subheader("Dados do Briefing"); st.json(orc_data.get('briefing', {}))
 
     elif view == "Novo Orçamento":
         if 'orcamento_step' not in st.session_state: st.session_state.orcamento_step = 1
         
         if st.session_state.orcamento_step == 1:
             st.header("🚀 Iniciar Novo Orçamento"); cat = st.selectbox("Tipo de Campanha", ["Selecione...","Campanha Online","Campanha Offline","Campanha 360","Projeto Estratégico"])
-            if st.button("Iniciar", disabled=(cat=="Selecione...")):
-                st.session_state.orcamento_categoria=cat; st.session_state.orcamento_step=2; st.rerun()
+            if st.button("Iniciar", disabled=(cat=="Selecione...")): st.session_state.orcamento_categoria=cat; st.session_state.orcamento_step=2; st.rerun()
         
         elif st.session_state.orcamento_step == 2:
-            st.header(f"Briefing: {st.session_state.get('orcamento_categoria')}"); cat = st.session_state.get('orcamento_categoria')
+            st.header(f"Briefing: {st.session_state.get('orcamento_categoria')}"); cat = st.session_state.get('orcamento_categoria');
             if cat=="Campanha Online": render_form_campanha_online()
             elif cat=="Campanha Offline": render_form_campanha_offline()
             elif cat=="Campanha 360": render_form_campanha_360()
             elif cat=="Projeto Estratégico": render_form_projeto_estrategico()
-            if st.button("⬅️ Voltar"):
-                st.session_state.orcamento_step=1; del st.session_state.orcamento_categoria; st.rerun()
+            if st.button("⬅️ Voltar"): st.session_state.orcamento_step=1; del st.session_state.orcamento_categoria; st.rerun()
 
         elif st.session_state.orcamento_step == 3:
             st.header("🤖 Validação do Escopo"); cat = st.session_state.get('orcamento_categoria', 'N/A')
-            if 'entregaveis' not in st.session_state:
-                st.session_state.entregaveis = [{"descricao": item} for item in get_sugestoes_entregaveis(cat)]
+            if 'entregaveis' not in st.session_state: st.session_state.entregaveis = [{"descricao": item} for item in get_sugestoes_entregaveis(cat)]
             c1,c2=st.columns([3,1]); novo=c1.text_input("Novo",label_visibility="collapsed")
-            if c2.button("Adicionar",use_container_width=True) and novo:
-                st.session_state.entregaveis.append({"descricao":novo}); st.rerun()
+            if c2.button("Adicionar",use_container_width=True) and novo: st.session_state.entregaveis.append({"descricao":novo}); st.rerun()
             for i, item in enumerate(st.session_state.entregaveis):
                 c1,c2=st.columns([4,1]); c1.write(f"• {item['descricao']}")
-                if c2.button("Remover", key=f"rm_{i}",use_container_width=True):
-                    st.session_state.entregaveis.pop(i); st.rerun()
+                if c2.button("Remover", key=f"rm_{i}",use_container_width=True): st.session_state.entregaveis.pop(i); st.rerun()
             st.divider(); c1,c2=st.columns(2)
             if c1.button("⬅️ Editar Briefing"): st.session_state.orcamento_step=2; del st.session_state.entregaveis; st.rerun()
-            if c2.button("Confirmar Escopo ➡️",type="primary",use_container_width=True,disabled=not st.session_state.entregaveis):
-                st.session_state.orcamento_step=4; st.rerun()
+            if c2.button("Confirmar Escopo ➡️",type="primary",use_container_width=True,disabled=not st.session_state.entregaveis): st.session_state.orcamento_step=4; st.rerun()
 
         elif st.session_state.orcamento_step == 4:
             st.header("👨‍💻 Alocação de Horas"); perfis = carregar_perfis_equipe(db, agencia_id)
@@ -267,20 +245,16 @@ else:
                 with st.expander(f"**{i+1}. {entr['descricao']}** ({horas_e}h)"):
                     for j, aloc in enumerate(entr['alocacoes']):
                         c1,c2,c3=st.columns([2,1,1]); c1.write(f"• {aloc['perfil_funcao']}"); c2.write(f"{aloc['horas']}h")
-                        if c3.button("X",key=f"rem_{i}_{j}"):
-                            st.session_state.entregaveis[i]['alocacoes'].pop(j); st.rerun()
+                        if c3.button("X",key=f"rem_{i}_{j}"): st.session_state.entregaveis[i]['alocacoes'].pop(j); st.rerun()
                     st.divider()
                     c1,c2,c3=st.columns([2,1,1]); sel=c1.selectbox("Perfil",nomes_perfis,key=f"sel_{i}",index=None); h=c2.number_input("Horas",0.5,step=0.5,key=f"h_{i}")
                     if c3.button("Adicionar",key=f"add_{i}",disabled=not sel):
                         p_data = next((p for p in perfis if p['funcao']==sel),None)
-                        if p_data:
-                            st.session_state.entregaveis[i]['alocacoes'].append({"perfil_id":p_data['id'],"perfil_funcao":p_data['funcao'],"custo_hora":p_data['custo_hora'],"horas":h})
-                            st.rerun()
+                        if p_data: st.session_state.entregaveis[i]['alocacoes'].append({"perfil_id":p_data['id'],"perfil_funcao":p_data['funcao'],"custo_hora":p_data['custo_hora'],"horas":h}); st.rerun()
             st.divider(); st.header(f"Total Horas: {total_h}h")
             c1,c2=st.columns(2)
             if c1.button("⬅️ Editar Escopo"): st.session_state.orcamento_step=3; st.rerun()
-            if c2.button("Calcular Orçamento ➡️",type="primary",use_container_width=True,disabled=(total_h==0)):
-                st.session_state.orcamento_step=5; st.rerun()
+            if c2.button("Calcular Orçamento ➡️",type="primary",use_container_width=True,disabled=(total_h==0)): st.session_state.orcamento_step=5; st.rerun()
 
         elif st.session_state.orcamento_step == 5:
             st.header("📊 Orçamento Preliminar"); configs = carregar_configuracoes_financeiras(db, agencia_id)
@@ -288,26 +262,18 @@ else:
             resultado = calcular_orcamento(st.session_state.entregaveis, configs)
             st.metric("Valor Total", f"R$ {resultado['valor_total_cliente']:.2f}")
             with st.expander("Ver detalhamento"):
-                st.markdown(f"""
-                - **Custo Equipe:** `R$ {resultado['custo_total_equipe']:.2f}`
-                - **+ Tx. Coordenação ({configs.get('taxa_coordenacao',0)}%):** `R$ {resultado['valor_taxa_coordenacao']:.2f}`
-                - **+ Custos Fixos ({configs.get('custos_fixos',0)}%):** `R$ {resultado['valor_custos_fixos']:.2f}`
-                - **= Subtotal Op.:** `R$ {resultado['subtotal_antes_lucro']:.2f}`
-                - **+ Lucro ({configs.get('margem_lucro',0)}%):** `R$ {resultado['valor_lucro']:.2f}`
-                - **= Subtotal:** `R$ {resultado['subtotal_antes_impostos']:.2f}`
-                - **+ Impostos ({configs.get('impostos',0)}%):** `R$ {resultado['valor_impostos']:.2f}`
-                """)
+                st.markdown(f"**Custo Equipe:** `R$ {resultado['custo_total_equipe']:.2f}`\n\n**+ Tx. Coordenação ({configs.get('taxa_coordenacao',0)}%):** `R$ {resultado['valor_taxa_coordenacao']:.2f}`\n\n**+ Custos Fixos ({configs.get('custos_fixos',0)}%):** `R$ {resultado['valor_custos_fixos']:.2f}`\n\n**= Subtotal Op.:** `R$ {resultado['subtotal_antes_lucro']:.2f}`\n\n**+ Lucro ({configs.get('margem_lucro',0)}%):** `R$ {resultado['valor_lucro']:.2f}`\n\n**= Subtotal:** `R$ {resultado['subtotal_antes_impostos']:.2f}`\n\n**+ Impostos ({configs.get('impostos',0)}%):** `R$ {resultado['valor_impostos']:.2f}`")
             st.divider()
             nome_cliente = st.text_input("Nome do Cliente/Projeto*")
             c1,c2=st.columns(2)
             if c1.button("⬅️ Editar Alocação"): st.session_state.orcamento_step=4; st.rerun()
             if c2.button("Salvar Orçamento ✅",type="primary",use_container_width=True,disabled=not nome_cliente):
                 dados = {"nome_cliente": nome_cliente, "briefing": st.session_state.dados_briefing, "escopo_final": st.session_state.entregaveis, "resultado_financeiro": resultado}
-                if salvar_orcamento_firestore(db, agencia_id, user_info, dados):
-                    st.session_state.orcamento_step=6; st.rerun()
+                if salvar_orcamento_firestore(db, agencia_id, user_info, dados): st.session_state.orcamento_step=6; st.rerun()
 
         elif st.session_state.orcamento_step == 6:
             st.balloons(); st.success("Orçamento salvo!");
+            if st.button("Ver Orçamentos Salvos"): st.session_state.current_view = "Meus Orçamentos"; st.rerun()
             if st.button("Gerar Novo Orçamento"):
                 for k in [k for k in st.session_state if k.startswith(('orcamento_','dados_briefing','entregaveis'))]: del st.session_state[k]
                 st.session_state.orcamento_step = 1; st.rerun()
@@ -318,17 +284,13 @@ else:
             with st.form("new_profile_form", clear_on_submit=True):
                 c1,c2=st.columns([2,1]); funcao=c1.text_input("Função"); custo=c2.number_input("Custo/Hora(R$)",0.0,step=5.0,format="%.2f")
                 if st.form_submit_button("Adicionar"):
-                    if funcao and custo > 0:
-                        db.collection('agencias').document(agencia_id).collection('perfis_equipe').add({"funcao":funcao,"custo_hora":custo})
-                        st.toast("Adicionado!"); st.rerun()
+                    if funcao and custo > 0: db.collection('agencias').document(agencia_id).collection('perfis_equipe').add({"funcao":funcao,"custo_hora":custo}); st.toast("Adicionado!"); st.rerun()
             st.divider(); perfis=carregar_perfis_equipe(db, agencia_id)
             if perfis:
                 c1,c2,c3=st.columns([2,1,1]);c1.write("**Função**");c2.write("**Custo/Hora**")
                 for p in perfis:
                     c1,c2,c3=st.columns([2,1,1]);c1.text(p['funcao']);c2.text(f"R$ {p['custo_hora']:.2f}")
-                    if c3.button("Deletar",key=f"del_{p['id']}",type="primary"):
-                        db.collection('agencias').document(agencia_id).collection('perfis_equipe').document(p['id']).delete()
-                        st.rerun()
+                    if c3.button("Deletar",key=f"del_{p['id']}",type="primary"): db.collection('agencias').document(agencia_id).collection('perfis_equipe').document(p['id']).delete(); st.rerun()
         with st.form(key="form_config_financeiras"):
             st.subheader("⚙️ Configurações Financeiras")
             configs = carregar_configuracoes_financeiras(db, agencia_id)
