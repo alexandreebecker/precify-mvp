@@ -1,32 +1,49 @@
 # ==============================================================================
 # Precify MVP - Painel de Precificação com Streamlit e Firebase
-# VERSÃO DA VITÓRIA FINAL - SEM AMBIGUIDADE
+# VERSÃO DA VITÓRIA - USANDO O MÉTODO MAIS ROBUSTO (TRY/EXCEPT)
 # ==============================================================================
 
 import streamlit as st
+import os
 import firebase_admin
 from firebase_admin import credentials, firestore
+from dotenv import load_dotenv
 import pandas as pd
 import json
 from streamlit.connections import ExperimentalBaseConnection
 from streamlit.runtime.caching import cache_resource
 
-# --- 2. Configuração da Conexão com Firebase (Método Direto) ---
+# --- 2. Configuração da Conexão com Firebase (Método Infalível) ---
 
 class FirebaseConnection(ExperimentalBaseConnection[firestore.Client]):
     def _connect(self, **kwargs) -> firestore.Client:
-        # ESTA É A ÚNICA LÓGICA AGORA. SEM IF/ELSE.
-        # ELE VAI TENTAR LER O SEGREDO. SE NÃO ACHAR, VAI QUEBRAR.
-        try:
-            creds_dict = json.loads(st.secrets["FIREBASE_SECRET_COMPACT_JSON"])
-            creds = credentials.Certificate(creds_dict)
-        except KeyError:
-            st.error("ERRO CRÍTICO: O segredo 'FIREBASE_SECRET_COMPACT_JSON' não foi encontrado no painel do Streamlit Cloud. Verifique o NOME do segredo.")
-            return None
-        except Exception as e:
-            st.error(f"Erro ao processar o segredo JSON. Verifique o CONTEÚDO do segredo: {e}")
-            return None
+        creds = None
         
+        # O MÉTODO MAIS ROBUSTO: Tentar usar o segredo diretamente.
+        try:
+            # Tenta acessar o segredo da nuvem. Se não existir, vai gerar um KeyError.
+            creds_string = st.secrets["FIREBASE_SECRET_COMPACT_JSON"]
+            creds_dict = json.loads(creds_string)
+            creds = credentials.Certificate(creds_dict)
+            print("✅ Segredo do Streamlit Cloud encontrado e processado!")
+            
+        except (KeyError, FileNotFoundError):
+            # Se o segredo da nuvem não for encontrado, tenta carregar localmente.
+            print("Segredo da nuvem não encontrado. Tentando credenciais locais...")
+            try:
+                load_dotenv()
+                cred_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+                creds = credentials.Certificate(cred_path)
+            except Exception as e:
+                st.error(f"Credenciais locais do Firebase também não foram encontradas. ERRO: {e}")
+                st.info("Verifique se você tem um arquivo .env com a variável GOOGLE_APPLICATION_CREDENTIALS configurada para rodar localmente.")
+                return None
+        except Exception as e:
+            # Captura qualquer outro erro no processamento do segredo
+            st.error(f"Erro ao processar o segredo JSON. Verifique o conteúdo do segredo no painel. ERRO: {e}")
+            return None
+
+        # Inicializa o app do Firebase se ainda não foi inicializado
         if not firebase_admin._apps:
             firebase_admin.initialize_app(creds)
         
@@ -44,7 +61,7 @@ try:
     conn = st.connection("firebase", type=FirebaseConnection)
     db = conn.get_client()
 except Exception as e:
-    st.error(f"❌ Falha crítica ao inicializar a conexão: {e}")
+    st.error(f"❌ Falha crítica ao inicializar a conexão com o Firebase: {e}")
     db = None
 
 # --- 4. Interface Principal da Aplicação ---
