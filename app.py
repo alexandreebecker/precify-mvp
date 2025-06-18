@@ -1,5 +1,5 @@
 # ==============================================================================
-# Precify.AI - Sprint 2: Versão Final, Corrigida e Completa (Legível)
+# Precify.AI - Sprint 2: Versão Final com Histórico de Orçamentos
 # ==============================================================================
 
 import streamlit as st
@@ -44,9 +44,7 @@ def render_form_campanha_online():
             pos_campanha = st.radio("Acompanhamento pós-campanha?", ("Não", "Sim"), horizontal=True, key="online_pos")
             dados_form['pos_campanha'] = (pos_campanha == "Sim")
         if st.form_submit_button("Analisar Briefing ➡️"):
-            st.session_state.dados_briefing = dados_form
-            st.session_state.orcamento_step = 3
-            st.rerun()
+            st.session_state.dados_briefing = dados_form; st.session_state.orcamento_step = 3; st.rerun()
 
 def render_form_campanha_offline():
     with st.form(key="briefing_offline_form"):
@@ -66,9 +64,7 @@ def render_form_campanha_offline():
             if dados_form['producao_fisica']: dados_form['itens_producao'] = st.multiselect("Itens?", ["Banner", "Brinde", "Estande"])
             dados_form['terceiros_envolvidos'] = (st.radio("Terceiros?", ("Não", "Sim"), horizontal=True) == "Sim")
         if st.form_submit_button("Analisar Briefing ➡️"):
-            st.session_state.dados_briefing = dados_form
-            st.session_state.orcamento_step = 3
-            st.rerun()
+            st.session_state.dados_briefing = dados_form; st.session_state.orcamento_step = 3; st.rerun()
 
 def render_form_campanha_360():
     with st.form(key="briefing_360_form"):
@@ -86,9 +82,7 @@ def render_form_campanha_360():
             if len(duracao) == 2: dados_form['duracao_inicio'], dados_form['duracao_fim'] = str(duracao[0]), str(duracao[1])
             dados_form['segmentacao_geografica'] = st.selectbox("Segmentação", ["Local", "Regional", "Nacional"])
         if st.form_submit_button("Analisar Briefing ➡️"):
-            st.session_state.dados_briefing = dados_form
-            st.session_state.orcamento_step = 3
-            st.rerun()
+            st.session_state.dados_briefing = dados_form; st.session_state.orcamento_step = 3; st.rerun()
 
 def render_form_projeto_estrategico():
     with st.form(key="briefing_estrategico_form"):
@@ -105,9 +99,7 @@ def render_form_projeto_estrategico():
             dados_form['imprensa_influenciadores'] = st.multiselect("Imprensa/Influencers?", ["Assessoria", "Mkt Influência"])
             if st.radio("Verba disponível?", ("Não", "Sim")) == "Sim": dados_form['valor_verba'] = st.number_input("Valor (R$)", min_value=0.0, format="%.2f")
         if st.form_submit_button("Analisar Briefing ➡️"):
-            st.session_state.dados_briefing = dados_form
-            st.session_state.orcamento_step = 3
-            st.rerun()
+            st.session_state.dados_briefing = dados_form; st.session_state.orcamento_step = 3; st.rerun()
 
 def calcular_orcamento(entregaveis, configs):
     custo_total_equipe = sum(aloc['horas'] * aloc['custo_hora'] for entr in entregaveis for aloc in entr.get('alocacoes', []))
@@ -141,6 +133,15 @@ def carregar_configuracoes_financeiras(_db, agencia_id):
         doc = _db.collection('agencias').document(agencia_id).get()
         return doc.to_dict().get('configuracoes_financeiras', {}) if doc.exists else {}
     except Exception as e: st.error(f"Erro configs: {e}"); return {}
+
+@st.cache_data(ttl=300)
+def carregar_orcamentos(_db, agencia_id):
+    """Carrega os orçamentos da agência, ordenados por data."""
+    try:
+        orc_ref = _db.collection('orçamentos').where('agencia_id', '==', agencia_id).order_by('data_orcamento', direction=firestore.Query.DESCENDING).stream()
+        return list(orc_ref)
+    except Exception as e:
+        st.error(f"Erro ao carregar orçamentos: {e}"); return []
 
 def salvar_orcamento_firestore(_db, agencia_id, user, dados):
     try:
@@ -182,7 +183,7 @@ else:
     st.sidebar.divider()
     
     if 'current_view' not in st.session_state: st.session_state.current_view = "Painel Principal"
-    view = st.sidebar.radio("Menu", ["Painel Principal", "Novo Orçamento", "Configurações"], key="navigation")
+    view = st.sidebar.radio("Menu", ["Painel Principal", "Novo Orçamento", "Meus Orçamentos", "Configurações"], key="navigation")
     
     if st.session_state.current_view=="Novo Orçamento" and view!="Novo Orçamento":
         for k in [k for k in st.session_state if k.startswith(('orcamento_', 'dados_briefing', 'entregaveis'))]: del st.session_state[k]
@@ -191,15 +192,45 @@ else:
     if view == "Painel Principal":
         st.header("Painel Principal"); st.write("Em breve.")
     
+    elif view == "Meus Orçamentos":
+        st.header("Histórico de Orçamentos")
+        orcamentos = carregar_orcamentos(db, agencia_id)
+        if not orcamentos:
+            st.info("Nenhum orçamento salvo ainda. Crie seu primeiro em 'Novo Orçamento'.")
+        else:
+            for orc_doc in orcamentos:
+                orc_data = orc_doc.to_dict()
+                res = orc_data.get('resultado_financeiro', {})
+                data_orc = orc_data.get('data_orcamento', 'N/A')
+                if hasattr(data_orc, 'strftime'):
+                    data_formatada = data_orc.strftime("%d/%m/%Y")
+                else:
+                    data_formatada = "Sem data"
+                
+                with st.expander(f"**{orc_data.get('nome_cliente', 'Cliente não informado')}** | {data_formatada} | **R$ {res.get('valor_total_cliente', 0):.2f}**"):
+                    st.subheader("Detalhes do Orçamento")
+                    st.markdown(f"""
+                    - **Custo Equipe:** `R$ {res.get('custo_total_equipe', 0):.2f}`
+                    - **Tx. Coordenação:** `R$ {res.get('valor_taxa_coordenacao', 0):.2f}`
+                    - **Custos Fixos:** `R$ {res.get('valor_custos_fixos', 0):.2f}`
+                    - **Lucro:** `R$ {res.get('valor_lucro', 0):.2f}`
+                    - **Impostos:** `R$ {res.get('valor_impostos', 0):.2f}`
+                    - **VALOR TOTAL:** **`R$ {res.get('valor_total_cliente', 0):.2f}`**
+                    """)
+                    st.subheader("Escopo Final")
+                    for item in orc_data.get('escopo_final', []):
+                        st.write(f"- {item['descricao']}")
+                    
+                    st.subheader("Dados do Briefing Original")
+                    st.json(orc_data.get('briefing', {}))
+
     elif view == "Novo Orçamento":
         if 'orcamento_step' not in st.session_state: st.session_state.orcamento_step = 1
         
         if st.session_state.orcamento_step == 1:
             st.header("🚀 Iniciar Novo Orçamento"); cat = st.selectbox("Tipo de Campanha", ["Selecione...","Campanha Online","Campanha Offline","Campanha 360","Projeto Estratégico"])
             if st.button("Iniciar", disabled=(cat=="Selecione...")):
-                st.session_state.orcamento_categoria=cat
-                st.session_state.orcamento_step=2
-                st.rerun()
+                st.session_state.orcamento_categoria=cat; st.session_state.orcamento_step=2; st.rerun()
         
         elif st.session_state.orcamento_step == 2:
             st.header(f"Briefing: {st.session_state.get('orcamento_categoria')}"); cat = st.session_state.get('orcamento_categoria')
@@ -208,9 +239,7 @@ else:
             elif cat=="Campanha 360": render_form_campanha_360()
             elif cat=="Projeto Estratégico": render_form_projeto_estrategico()
             if st.button("⬅️ Voltar"):
-                st.session_state.orcamento_step=1
-                del st.session_state.orcamento_categoria
-                st.rerun()
+                st.session_state.orcamento_step=1; del st.session_state.orcamento_categoria; st.rerun()
 
         elif st.session_state.orcamento_step == 3:
             st.header("🤖 Validação do Escopo"); cat = st.session_state.get('orcamento_categoria', 'N/A')
@@ -218,21 +247,15 @@ else:
                 st.session_state.entregaveis = [{"descricao": item} for item in get_sugestoes_entregaveis(cat)]
             c1,c2=st.columns([3,1]); novo=c1.text_input("Novo",label_visibility="collapsed")
             if c2.button("Adicionar",use_container_width=True) and novo:
-                st.session_state.entregaveis.append({"descricao":novo})
-                st.rerun()
+                st.session_state.entregaveis.append({"descricao":novo}); st.rerun()
             for i, item in enumerate(st.session_state.entregaveis):
                 c1,c2=st.columns([4,1]); c1.write(f"• {item['descricao']}")
                 if c2.button("Remover", key=f"rm_{i}",use_container_width=True):
-                    st.session_state.entregaveis.pop(i)
-                    st.rerun()
+                    st.session_state.entregaveis.pop(i); st.rerun()
             st.divider(); c1,c2=st.columns(2)
-            if c1.button("⬅️ Editar Briefing"):
-                st.session_state.orcamento_step=2
-                del st.session_state.entregaveis
-                st.rerun()
+            if c1.button("⬅️ Editar Briefing"): st.session_state.orcamento_step=2; del st.session_state.entregaveis; st.rerun()
             if c2.button("Confirmar Escopo ➡️",type="primary",use_container_width=True,disabled=not st.session_state.entregaveis):
-                st.session_state.orcamento_step=4
-                st.rerun()
+                st.session_state.orcamento_step=4; st.rerun()
 
         elif st.session_state.orcamento_step == 4:
             st.header("👨‍💻 Alocação de Horas"); perfis = carregar_perfis_equipe(db, agencia_id)
@@ -245,8 +268,7 @@ else:
                     for j, aloc in enumerate(entr['alocacoes']):
                         c1,c2,c3=st.columns([2,1,1]); c1.write(f"• {aloc['perfil_funcao']}"); c2.write(f"{aloc['horas']}h")
                         if c3.button("X",key=f"rem_{i}_{j}"):
-                            st.session_state.entregaveis[i]['alocacoes'].pop(j)
-                            st.rerun()
+                            st.session_state.entregaveis[i]['alocacoes'].pop(j); st.rerun()
                     st.divider()
                     c1,c2,c3=st.columns([2,1,1]); sel=c1.selectbox("Perfil",nomes_perfis,key=f"sel_{i}",index=None); h=c2.number_input("Horas",0.5,step=0.5,key=f"h_{i}")
                     if c3.button("Adicionar",key=f"add_{i}",disabled=not sel):
@@ -266,7 +288,15 @@ else:
             resultado = calcular_orcamento(st.session_state.entregaveis, configs)
             st.metric("Valor Total", f"R$ {resultado['valor_total_cliente']:.2f}")
             with st.expander("Ver detalhamento"):
-                st.markdown(f"**Custo Equipe:** `R$ {resultado['custo_total_equipe']:.2f}`\n\n**+ Tx. Coordenação ({configs.get('taxa_coordenacao',0)}%):** `R$ {resultado['valor_taxa_coordenacao']:.2f}`\n\n**+ Custos Fixos ({configs.get('custos_fixos',0)}%):** `R$ {resultado['valor_custos_fixos']:.2f}`\n\n**= Subtotal Op.:** `R$ {resultado['subtotal_antes_lucro']:.2f}`\n\n**+ Lucro ({configs.get('margem_lucro',0)}%):** `R$ {resultado['valor_lucro']:.2f}`\n\n**= Subtotal:** `R$ {resultado['subtotal_antes_impostos']:.2f}`\n\n**+ Impostos ({configs.get('impostos',0)}%):** `R$ {resultado['valor_impostos']:.2f}`")
+                st.markdown(f"""
+                - **Custo Equipe:** `R$ {resultado['custo_total_equipe']:.2f}`
+                - **+ Tx. Coordenação ({configs.get('taxa_coordenacao',0)}%):** `R$ {resultado['valor_taxa_coordenacao']:.2f}`
+                - **+ Custos Fixos ({configs.get('custos_fixos',0)}%):** `R$ {resultado['valor_custos_fixos']:.2f}`
+                - **= Subtotal Op.:** `R$ {resultado['subtotal_antes_lucro']:.2f}`
+                - **+ Lucro ({configs.get('margem_lucro',0)}%):** `R$ {resultado['valor_lucro']:.2f}`
+                - **= Subtotal:** `R$ {resultado['subtotal_antes_impostos']:.2f}`
+                - **+ Impostos ({configs.get('impostos',0)}%):** `R$ {resultado['valor_impostos']:.2f}`
+                """)
             st.divider()
             nome_cliente = st.text_input("Nome do Cliente/Projeto*")
             c1,c2=st.columns(2)
