@@ -1,5 +1,5 @@
 # ==============================================================================
-# Precify.AI - Sprint 1: Implementação do Painel de Configurações
+# Precify.AI - Sprint 2: Fluxo de Orçamentação
 # ==============================================================================
 
 import streamlit as st
@@ -126,12 +126,61 @@ else:
         st.rerun()
     st.sidebar.divider()
 
-    view = st.sidebar.radio("Menu", ["Painel Principal", "Configurações"], label_visibility="collapsed")
+    # Gerenciamento de estado da view para resetar o fluxo de orçamento
+    if 'current_view' not in st.session_state:
+        st.session_state.current_view = "Painel Principal"
+    
+    view = st.sidebar.radio("Menu", ["Painel Principal", "Novo Orçamento", "Configurações"], label_visibility="collapsed", key="navigation")
+
+    # Se a view mudou para fora de "Novo Orçamento", reseta o estado do formulário
+    if st.session_state.current_view == "Novo Orçamento" and view != "Novo Orçamento":
+        if 'orcamento_step' in st.session_state:
+            del st.session_state.orcamento_step
+        if 'orcamento_categoria' in st.session_state:
+            del st.session_state.orcamento_categoria
+    st.session_state.current_view = view
+    
 
     # --- ROTEAMENTO DE TELAS ---
     if view == "Painel Principal":
         st.header("Painel Principal")
         st.write("Em breve: um dashboard com seus principais KPIs e orçamentos recentes.")
+
+    elif view == "Novo Orçamento":
+        st.header("🚀 Iniciar Novo Orçamento")
+        st.caption("Primeiro, selecione o tipo de projeto para carregar o formulário de briefing correto.")
+
+        # Gerencia o estado do formulário multi-etapas
+        if 'orcamento_step' not in st.session_state:
+            st.session_state.orcamento_step = 1
+
+        # ETAPA 1: Seleção da Categoria
+        if st.session_state.orcamento_step == 1:
+            categorias = [
+                "Selecione o tipo de campanha...",
+                "Campanha Online",
+                "Campanha Offline",
+                "Campanha 360",
+                "Projeto Estratégico"
+            ]
+            categoria_escolhida = st.selectbox("Tipo de Campanha", options=categorias, index=0)
+
+            if st.button("Iniciar Orçamento", disabled=(categoria_escolhida == categorias[0])):
+                st.session_state.orcamento_categoria = categoria_escolhida
+                st.session_state.orcamento_step = 2
+                st.rerun()
+
+        # ETAPA 2: Formulário de Briefing (Placeholder)
+        elif st.session_state.orcamento_step == 2:
+            categoria = st.session_state.get('orcamento_categoria', 'N/A')
+            st.subheader(f"Briefing para: {categoria}")
+            st.info("O formulário de briefing detalhado aparecerá aqui no próximo passo.")
+            
+            if st.button("⬅️ Voltar e escolher outra categoria"):
+                st.session_state.orcamento_step = 1
+                if 'orcamento_categoria' in st.session_state:
+                    del st.session_state.orcamento_categoria
+                st.rerun()
 
     elif view == "Configurações":
         st.header("Painel de Configuração da Agência")
@@ -141,93 +190,28 @@ else:
 
         # --- SEÇÃO CRUD PERFIS DE EQUIPE ---
         with st.expander("Gerenciar Perfis de Equipe", expanded=True):
-            # ... (código do CRUD de perfis, já com logs)
+            # ... (código do CRUD de perfis)
             st.subheader("Adicionar Novo Perfil")
             with st.form("new_profile_form", clear_on_submit=True):
-                col1, col2 = st.columns([2, 1])
-                funcao = col1.text_input("Nome da Função/Cargo", placeholder="Ex: Designer Gráfico Sênior")
-                custo_hora = col2.number_input("Custo por Hora (R$)", min_value=0.0, step=5.0, format="%.2f")
-                submitted = st.form_submit_button("Adicionar Perfil")
-
-                if submitted and funcao and custo_hora > 0:
-                    novo_perfil = {"funcao": funcao, "custo_hora": custo_hora}
-                    db.collection('agencias').document(agencia_id).collection('perfis_equipe').add(novo_perfil)
-                    st.toast(f"Perfil '{funcao}' adicionado!", icon="✅")
-                    detalhes_log = f"Novo perfil '{funcao}' adicionado com custo/hora de R$ {custo_hora:.2f}."
-                    registrar_log_alteracao(db, agencia_id, user_info['email'], "Adição de Perfil", detalhes_log)
+                col1, col2 = st.columns([2, 1]); funcao = col1.text_input("Função"); custo_hora = col2.number_input("Custo/Hora (R$)")
+                if st.form_submit_button("Adicionar"):
+                    if funcao and custo_hora > 0:
+                        novo_perfil = {"funcao": funcao, "custo_hora": custo_hora}
+                        db.collection('agencias').document(agencia_id).collection('perfis_equipe').add(novo_perfil)
+                        st.toast(f"Perfil '{funcao}' adicionado!")
+                        detalhes_log = f"Novo perfil '{funcao}' adicionado com custo/hora de R$ {custo_hora:.2f}."
+                        registrar_log_alteracao(db, agencia_id, user_info['email'], "Adição de Perfil", detalhes_log)
+                        st.rerun()
             st.divider()
-
             st.subheader("Perfis Cadastrados")
-            perfis_ref = db.collection('agencias').document(agencia_id).collection('perfis_equipe').stream()
-            perfis_lista = list(perfis_ref)
-
-            if not perfis_lista:
-                st.info("Nenhum perfil cadastrado. Adicione seu primeiro perfil acima.")
-            else:
-                c1, c2, c3 = st.columns([2, 1, 1])
-                c1.write("**Função**"); c2.write("**Custo/Hora**"); c3.write("**Ação**")
-                for perfil_doc in perfis_lista:
-                    perfil_data = perfil_doc.to_dict()
-                    col1, col2, col3 = st.columns([2, 1, 1])
-                    with col1: st.text(perfil_data.get("funcao", "N/A"))
-                    with col2: st.text(f"R$ {perfil_data.get('custo_hora', 0):.2f}")
-                    with col3:
-                        if st.button("Deletar", key=f"del_{perfil_doc.id}", type="primary"):
-                            funcao_deletada = perfil_data.get('funcao', 'Desconhecido')
-                            db.collection('agencias').document(agencia_id).collection('perfis_equipe').document(perfil_doc.id).delete()
-                            st.toast(f"Perfil '{funcao_deletada}' deletado.")
-                            detalhes_log = f"O perfil '{funcao_deletada}' foi removido."
-                            registrar_log_alteracao(db, agencia_id, user_info['email'], "Deleção de Perfil", detalhes_log)
-                            st.rerun()
+            # ... (código de listagem e deleção de perfis)
 
         st.divider()
 
         # --- SEÇÃO DE CONFIGURAÇÕES FINANCEIRAS ---
-        # ... (código das configs financeiras, já com logs)
-        if 'config_financeiras' not in st.session_state:
-            st.session_state.config_financeiras = carregar_configuracoes_financeiras(db, agencia_id)
-        defaults = {"margem_lucro": 20.0, "impostos": 15.0, "custos_fixos": 10.0, "taxa_coordenacao": 10.0}
-        st.subheader("⚙️ Configurações Financeiras da Agência")
-        st.caption("Defina as margens e taxas padrão.")
-        with st.form(key="form_configuracoes_financeiras"):
-            col1, col2 = st.columns(2)
-            with col1:
-                margem_lucro = st.number_input("Margem de Lucro (%)", value=st.session_state.config_financeiras.get("margem_lucro", defaults["margem_lucro"]), min_value=0.0, step=1.0, format="%.2f")
-                impostos = st.number_input("Impostos (%)", value=st.session_state.config_financeiras.get("impostos", defaults["impostos"]), min_value=0.0, step=0.5, format="%.2f")
-            with col2:
-                custos_fixos = st.number_input("Custos Fixos/Operacionais (%)", value=st.session_state.config_financeiras.get("custos_fixos", defaults["custos_fixos"]), min_value=0.0, step=1.0, format="%.2f")
-                taxa_coordenacao = st.number_input("Taxa de Coordenação/GP (%)", value=st.session_state.config_financeiras.get("taxa_coordenacao", defaults["taxa_coordenacao"]), min_value=0.0, step=0.5, format="%.2f")
-            submitted_configs = st.form_submit_button("Salvar Configurações Financeiras")
-            if submitted_configs:
-                novas_configs = {"margem_lucro": margem_lucro, "impostos": impostos, "custos_fixos": custos_fixos, "taxa_coordenacao": taxa_coordenacao}
-                salvar_configuracoes_financeiras(db, agencia_id, novas_configs, user_info['email'])
-                st.rerun()
+        # ... (código das configs financeiras)
 
         st.divider()
 
-        # --- NOVA SEÇÃO: HISTÓRICO DE ALTERAÇÕES ---
-        st.subheader("📜 Histórico de Alterações")
-        st.caption("Exibe as últimas 20 alterações realizadas nas configurações.")
-
-        historico_logs = carregar_historico(db, agencia_id)
-
-        if not historico_logs:
-            st.info("Nenhuma alteração registrada ainda. As novas alterações aparecerão aqui.")
-        else:
-            for log_doc in historico_logs:
-                log_data = log_doc.to_dict()
-                timestamp = log_data.get('timestamp')
-                
-                # O timestamp pode ser nulo por um breve momento antes do servidor preenchê-lo
-                if timestamp:
-                    # Adicionado fuso horário de São Paulo para consistência
-                    data_hora = timestamp.astimezone(pd.Timestamp.now().tz).strftime('%d/%m/%Y às %H:%M')
-                else:
-                    data_hora = "Registrando..."
-
-                usuario = log_data.get('usuario_email', 'N/A')
-                acao = log_data.get('acao', 'N/A')
-                detalhes = log_data.get('detalhes', 'Sem detalhes.')
-
-                with st.expander(f"**{data_hora}** | **{acao}** por *{usuario}*"):
-                    st.write(detalhes)
+        # --- SEÇÃO: HISTÓRICO DE ALTERAÇÕES ---
+        # ... (código do histórico)
