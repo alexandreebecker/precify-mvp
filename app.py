@@ -1,6 +1,6 @@
 # ==============================================================================
 # Precify MVP - Painel de Precificação com Streamlit e Firebase
-# VERSÃO DA VITÓRIA - A CORREÇÃO FINAL
+# VERSÃO DA VITÓRIA ABSOLUTA - A CORREÇÃO FINAL
 # ==============================================================================
 
 # --- 1. Importações de Bibliotecas ---
@@ -26,10 +26,10 @@ class FirebaseConnection(ExperimentalBaseConnection[firestore.Client]):
             try:
                 creds_string = st.secrets["FIREBASE_SECRETS_JSON"]
                 
-                # AQUI ESTÁ A LINHA DE CÓDIGO MAIS IMPORTANTE DE TODAS:
-                # "Conserta" a string da chave privada antes de fazer o parse do JSON.
-                # Isso substitui as quebras de linha reais pela sua forma de texto.
-                creds_dict = json.loads(creds_string.replace('\n', '\\n'))
+                # AQUI ESTÁ A LINHA MÁGICA E DEFINITIVA:
+                # 1. .strip() remove os caracteres invisíveis do início e fim.
+                # 2. .replace() conserta as quebras de linha internas.
+                creds_dict = json.loads(creds_string.strip().replace('\n', '\\n'))
                 
                 creds = credentials.Certificate(creds_dict)
             except Exception as e:
