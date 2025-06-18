@@ -1,5 +1,5 @@
 # ==============================================================================
-# Precify.AI MVP - Versão da Vitória (Login/Registro Infalível)
+# Precify.AI MVP - Versão da Vitória (Lógica de Autenticação Infalível)
 # ==============================================================================
 
 import streamlit as st
@@ -24,7 +24,7 @@ def initialize_firebase():
             firebase_admin.initialize_app(credentials.Certificate(creds_dict))
         return firestore.client()
     except Exception as e:
-        st.error(f"FALHA NA CONEXÃO: Verifique seus Secrets. Erro: {e}")
+        st.error(f"FALHA NA CONEXÃO COM FIREBASE: {e}")
         return None
 
 # --- 3. INICIALIZAÇÃO ---
@@ -46,38 +46,121 @@ if db:
         st.warning(f"Não foi possível buscar usuários: {e}.")
 
 authenticator = stauth.Authenticate(
-    users_config, 'precify_cookie_v6', 'precify_key_v6', 30
+    users_config, 'precify_cookie_v7', 'precify_key_v7', 30
 )
 
-# --- 5. LÓGICA DE LOGIN/REGISTRO (A MAIS SIMPLES POSSÍVEL) ---
-name, authentication_status, username = authenticator.login()
+# --- 5. LÓGICA DE LOGIN/REGISTRO (INFALÍVEL) ---
 
-if authentication_status:
+# Renderiza o formulário de login.
+authenticator.login('Login', 'main')
+
+# Verifica o estado da autenticação a partir do st.session_state
+if st.session_state["authentication_status"]:
     # --- APP PRINCIPAL (QUANDO O USUÁRIO ESTÁ LOGADO) ---
-    st.sidebar.title(f"Bem-vindo, {name}!")
-    authenticator.logout()
-
-    st.title("Painel Principal do Precify.AI")
-    st.write("Você está logado e pronto para começar!")
-    # Aqui entra o seu roteamento de páginas (render_pagina_inicial, etc.)
-
-elif authentication_status == False:
-    st.error('Usuário ou senha incorreto(a)')
-
-elif authentication_status == None:
-    st.title("Bem-vindo ao Precify.AI")
-    st.warning('Por favor, faça o login ou registre-se.')
+    name = st.session_state["name"]
+    username = st.session_state["username"]
     
-    # Lógica de Registro de Novo Usuário (Simplificada)
-    try:
-        if authenticator.register_user("Registrar novo usuário"):
-            email = st.session_state['email']
-            name = st.session_state['name']
-            password = st.session_state['password']
+    st.sidebar.title(f"Bem-vindo, {name}!")
+    authenticator.logout('Logout', 'sidebar')
+
+    # O RESTO DO SEU APLICATIVO VAI AQUI DENTRO
+    # ... (código do app principal exatamente como antes)
+    
+    def chamar_ia_precify(briefing, tipo_projeto, canais, prazo):
+        st.toast("Analisando briefing...", icon="🤖"); time.sleep(1)
+        user_record = auth.get_user_by_email(username)
+        return {
+            "uid": user_record.uid, "data_orcamento": datetime.datetime.now(),
+            "briefing_original": briefing,
+            "input_usuario": {"tipo_projeto": tipo_projeto, "canais": canais, "prazo": str(prazo)},
+            "interpretacao_ia": {"tipo_projeto_detectado": f"Projeto de {tipo_projeto}", "numero_entregas": f"{len(canais) * 3} peças", "complexidade": "Média", "nivel_urgencia": "Normal"},
+            "estimativa_custos": {"criação_h": 15, "texto_h": 10, "midia_h": 15, "custo_total": 1000 + len(canais) * 350, "margem_aplicada": 0.0, "preco_sugerido": 1000 + len(canais) * 350},
+            "justificativa": f"Estimativa para {tipo_projeto} nos canais {', '.join(canais)}."
+        }
+        
+    def render_pagina_inicial():
+        st.title("Precify.AI"); st.header("Cole o briefing. Deixe a IA fazer o orçamento.")
+        if st.button("Começar Orçamento", type="primary", use_container_width=True):
+            st.session_state.page = "input_briefing"; st.rerun()
+
+    def render_input_briefing():
+        if st.button("← Voltar para o Início"): st.session_state.page = "inicial"; st.rerun()
+        st.header("Input do Briefing")
+        with st.form("briefing_form"):
+            st.subheader("Cole o briefing do cliente")
+            briefing_texto = st.text_area("Briefing", height=200, placeholder="Ex: Campanha de redes sociais...")
+            st.subheader("Preferências rápidas")
+            c1, c2 = st.columns(2)
+            tipo_projeto = c1.selectbox("Tipo", ["Campanha digital", "Logo", "Social media", "Vídeo", "Outro"])
+            prazo = c2.date_input("Prazo", min_value=datetime.date.today())
+            canais = st.multiselect("Canais", ["Instagram", "YouTube", "TV", "Impressos", "TikTok"])
+            if st.form_submit_button("Gerar Orçamento", type="primary", use_container_width=True):
+                if briefing_texto and canais:
+                    with st.spinner("Aguarde, nossa IA está trabalhando..."):
+                        st.session_state.orcamento_gerado = chamar_ia_precify(briefing_texto, tipo_projeto, canais, prazo)
+                        st.session_state.page = "orcamento_gerado"; st.rerun()
+                else: st.warning("Preencha o briefing e selecione pelo menos um canal.")
+
+    def render_orcamento_gerado():
+        if st.button("← Editar Briefing"): st.session_state.page = "input_briefing"; st.rerun()
+        st.header("Orçamento Gerado")
+        orcamento = st.session_state.get("orcamento_gerado")
+        if not orcamento: return st.error("Erro ao gerar orçamento.")
+        interpretacao = orcamento["interpretacao_ia"]; custos = orcamento["estimativa_custos"]
+        with st.container(border=True): st.subheader("Interpretação do Briefing"); c1, c2 = st.columns(2); c1.metric("Tipo", interpretacao["tipo_projeto_detectado"]); c2.metric("Entregas", interpretacao["numero_entregas"])
+        with st.container(border=True):
+            st.subheader("Estimativa de Custos")
+            margem = st.slider("Margem (%)", 0, 100, int(custos["margem_aplicada"]))
+            preco_sugerido = custos["custo_total"] * (1 + margem / 100)
+            c1, c2 = st.columns(2)
+            c1.metric("Custo Total", f"R$ {custos['custo_total']:,.2f}".replace(",", "."))
+            c2.metric("Preço Final", f"R$ {preco_sugerido:,.2f}".replace(",", "."))
+        with st.container(border=True): st.subheader("Justificativa"); st.write(orcamento["justificativa"])
+        if st.button("Salvar no Histórico", type="primary"):
+            with st.spinner("Salvando..."):
+                orcamento_para_salvar = orcamento.copy(); orcamento_para_salvar['estimativa_custos']['preco_sugerido'] = preco_sugerido
+                db.collection("orçamentos").add(orcamento_para_salvar)
+                st.toast("Salvo!", icon="✅"); time.sleep(1); st.rerun()
+
+    def render_historico():
+        st.header("Histórico de Orçamentos")
+        user_record = auth.get_user_by_email(username)
+        docs = db.collection("orçamentos").where("uid", "==", user_record.uid).order_by("data_orcamento", direction=firestore.Query.DESCENDING).stream()
+        orcamentos_lista = [dict(id=doc.id, **doc.to_dict()) for doc in docs]
+        if orcamentos_lista: st.dataframe(pd.DataFrame(orcamentos_lista), use_container_width=True)
+        else: st.info("Nenhum orçamento salvo no histórico.")
+        
+    if "page" not in st.session_state: st.session_state.page = "inicial"
+    app_mode = st.sidebar.radio("Navegação", ["Gerar Orçamento", "Histórico"])
+    if app_mode == "Gerar Orçamento":
+        if st.session_state.page == "inicial": render_pagina_inicial()
+        elif st.session_state.page == "input_briefing": render_input_briefing()
+        else: render_orcamento_gerado()
+    else: render_historico()
+
+elif st.session_state["authentication_status"] is False:
+    st.error('Usuário ou senha incorreto(a)')
+elif st.session_state["authentication_status"] is None:
+    st.warning('Por favor, faça o login para continuar.')
+    # LÓGICA DE REGISTRO (CUSTOMIZADA E ROBUSTA)
+    with st.expander("Não tem uma conta? Registre-se aqui"):
+        with st.form("register_form"):
+            new_email = st.text_input("Email")
+            new_name = st.text_input("Nome")
+            new_password = st.text_input("Senha", type="password")
+            confirm_password = st.text_input("Confirmar Senha", type="password")
             
-            # Cria o usuário no Firebase Authentication
-            user = auth.create_user(email=email, password=password, display_name=name)
-            
-            st.success('Usuário registrado com sucesso! Por favor, recarregue a página e faça o login.')
-    except Exception as e:
-        st.error(e)
+            if st.form_submit_button("Registrar"):
+                if new_password == confirm_password:
+                    try:
+                        user = auth.create_user(
+                            email=new_email,
+                            password=new_password,
+                            display_name=new_name
+                        )
+                        st.success("Usuário registrado com sucesso! Por favor, recarregue a página e faça o login.")
+                        st.balloons()
+                    except Exception as e:
+                        st.error(f"Erro ao registrar: {e}")
+                else:
+                    st.error("As senhas não coincidem.")
