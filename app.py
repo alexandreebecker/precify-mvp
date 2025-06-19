@@ -1,5 +1,5 @@
 # ==============================================================================
-# Precify.AI - SPRINT 2.5 - Final Cache Fix (Versão Estável e Definitiva)
+# Precify.AI - SPRINT 2.5 - Final Firestore Fix (Versão Estável e Definitiva)
 # ==============================================================================
 
 import streamlit as st
@@ -333,7 +333,7 @@ def main():
                     if funcao and custo > 0: 
                         db.collection('agencias').document(agencia_id).collection('perfis_equipe').add({"funcao":funcao,"custo_hora":custo})
                         st.toast("Adicionado!")
-                        st.cache_data.clear() # --- CORREÇÃO APLICADA AQUI ---
+                        st.cache_data.clear()
                         st.rerun()
             st.divider(); perfis=carregar_perfis_equipe(db, agencia_id)
             if perfis:
@@ -342,7 +342,7 @@ def main():
                     c1,c2,c3=st.columns([2,1,1]);c1.text(p['funcao']);c2.text(f"R$ {p['custo_hora']:.2f}")
                     if c3.button("Deletar",key=f"del_{p['id']}",type="primary"): 
                         db.collection('agencias').document(agencia_id).collection('perfis_equipe').document(p['id']).delete()
-                        st.cache_data.clear() # --- CORREÇÃO APLICADA AQUI ---
+                        st.cache_data.clear()
                         st.rerun()
         with st.form(key="form_config_financeiras"):
             st.subheader("⚙️ Configurações Financeiras")
@@ -354,9 +354,13 @@ def main():
             coord = c2.number_input("Taxa Coord. (%)", 0.0,value=configs.get("taxa_coordenacao",defaults["taxa_coordenacao"]))
             if st.form_submit_button("Salvar"):
                 novas_configs = {"margem_lucro":lucro, "impostos":impostos, "custos_fixos":fixos, "taxa_coordenacao":coord}
-                db.collection('agencias').document(agencia_id).update({"configuracoes_financeiras":novas_configs})
-                st.cache_data.clear() # --- CORREÇÃO APLICADA AQUI ---
+                # --- CORREÇÃO APLICADA AQUI ---
+                # Troca 'update' por 'set' com 'merge=True' para uma operação de "salvar ou atualizar"
+                db.collection('agencias').document(agencia_id).set({"configuracoes_financeiras": novas_configs}, merge=True)
+                st.cache_data.clear()
                 st.success("Salvo!")
+                # Adicionado um rerun para garantir que a tela reflita os novos valores salvos
+                st.rerun()
 
 if __name__ == '__main__':
     main()
