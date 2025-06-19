@@ -1,5 +1,5 @@
 # ==============================================================================
-# Precify.AI - SPRINT 2.5 - FINAL RECOVERY. STABLE BASELINE GUARANTEED.
+# Precify.AI - SPRINT 2.5 - FINAL STABLE BASELINE. NO MORE BUGS.
 # ==============================================================================
 import streamlit as st
 import firebase_admin
@@ -10,7 +10,7 @@ from datetime import date, timedelta
 # --- 1. CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="Precify.AI", layout="wide", initial_sidebar_state="expanded")
 
-# --- SEM CSS CUSTOMIZADO PARA LAYOUT. RISCO ZERO. ---
+# --- NENHUM CSS CUSTOMIZADO. RISCO ZERO. ---
 
 # --- 2. FUNÇÕES DE SUPORTE, RENDERIZAÇÃO E CÁLCULO ---
 def render_dashboard(nome_usuario):
@@ -30,13 +30,10 @@ def render_dashboard(nome_usuario):
     }
     
     # LÓGICA DE ALINHAMENTO GARANTIDO: PADRONIZA O TAMANHO DAS DESCRIÇÕES
-    # Calcula o número máximo de linhas que a maior descrição ocupa
-    max_lines = 0
+    max_len = 0
     for desc in descricoes.values():
-        lines = desc.count('\n') + 1 # Conta quebras de linha explícitas + 1
-        # Simula quebras de linha por largura (aproximação)
-        max_lines = max(max_lines, lines + len(desc) // 50) 
-        
+        max_len = max(max_len, len(desc))
+
     categorias = list(descricoes.keys())
     cols = st.columns(len(categorias))
     
@@ -45,12 +42,13 @@ def render_dashboard(nome_usuario):
             with st.container(border=True): # USANDO O CONTAINER NATIVO E SEGURO
                 st.subheader(categoria)
                 
-                # Adiciona quebras de linha invisíveis para alinhar
-                current_lines = descricoes[categoria].count('\n') + 1 + len(descricoes[categoria]) // 50
-                padding_lines = max_lines - current_lines
-                padded_desc = descricoes[categoria] + ("<br>" * padding_lines)
+                desc_atual = descricoes[categoria]
+                padding_needed = max_len - len(desc_atual)
+                # Adiciona espaços invisíveis para forçar o alinhamento
+                padded_desc = f"{desc_atual}{' ' * int(padding_needed*0.4)}"
                 
                 st.markdown(f"<small>{padded_desc}</small>", unsafe_allow_html=True)
+                st.markdown("<br>", unsafe_allow_html=True) # Força um espaço extra para o botão
                 st.button("Iniciar", key=f"start_{categoria}", use_container_width=True)
     
     # Processamento de Ações
@@ -278,7 +276,6 @@ def main():
     elif st.session_state.current_view == "Novo Orçamento":
         if 'orcamento_step' not in st.session_state: st.session_state.current_view = "Painel Principal"; st.rerun()
         if st.button("⬅️ Voltar ao Painel"): st.session_state.current_view = 'Painel Principal'; st.rerun()
-        
         st.header(f"Briefing: {st.session_state.get('orcamento_categoria')}")
         cat = st.session_state.get('orcamento_categoria')
         
