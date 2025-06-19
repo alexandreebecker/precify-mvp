@@ -1,5 +1,5 @@
 # ==============================================================================
-# Precify.AI - SPRINT 2.5 - STABLE BASELINE (Functional and Verified)
+# Precify.AI - SPRINT 2.5 - Final Stable Version with Professional UI
 # ==============================================================================
 import streamlit as st
 import firebase_admin
@@ -7,8 +7,71 @@ from firebase_admin import credentials, firestore, auth
 import json
 from datetime import date, timedelta
 
-# --- 1. CONFIGURAÇÃO DA PÁGINA ---
+# --- 1. CONFIGURAÇÃO DA PÁGINA E ESTILO CUSTOMIZADO ---
 st.set_page_config(page_title="Precify.AI", layout="wide", initial_sidebar_state="expanded")
+
+def load_custom_css():
+    st.markdown("""
+        <style>
+            @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&family=Inter:wght@400;700&display=swap');
+
+            /* ESTILO GERAL */
+            body, .stApp {
+                font-family: 'Inter', sans-serif;
+                background-color: #F0F2F6;
+            }
+            h1, h2, h3, h4, h5, h6 {
+                font-family: 'Poppins', sans-serif;
+                font-weight: 600;
+            }
+            .stButton>button {
+                border-radius: 8px;
+                font-weight: 600;
+            }
+            
+            /* CARDS DO PAINEL PRINCIPAL */
+            .st-emotion-cache-1r6slb0 { /* Seletor para a div que contém as colunas */
+                display: flex;
+                flex-wrap: wrap;
+                gap: 1rem;
+            }
+            div[data-testid="stVerticalBlock"] > [data-testid="stHorizontalBlock"] > [data-testid="stVerticalBlock"] {
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+                height: 100%; /* Força os cards a ocuparem a mesma altura */
+                background-color: #FFFFFF;
+                border: 1px solid #E6EAF1;
+                border-radius: 12px;
+                padding: 25px;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.04);
+                transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+            }
+            div[data-testid="stVerticalBlock"] > [data-testid="stHorizontalBlock"] > [data-testid="stVerticalBlock"]:hover {
+                transform: translateY(-5px);
+                box-shadow: 0 12px 16px rgba(0,0,0,0.08);
+            }
+
+            /* SIDEBAR */
+            [data-testid="stSidebar"] {
+                 background-color: #FFFFFF;
+                 border-right: 1px solid #E6EAF1;
+            }
+            [data-testid="stSidebar"] .stButton>button {
+                 text-align: left;
+                 padding: 10px 20px;
+                 background-color: transparent;
+                 color: #555;
+                 border: none;
+            }
+            [data-testid="stSidebar"] .stButton>button[kind="primary"] {
+                 background-color: #4F8BF9;
+                 color: white;
+            }
+        </style>
+    """, unsafe_allow_html=True)
+
+load_custom_css() # Garante que nosso CSS seja carregado!
 
 # --- 2. FUNÇÕES DE SUPORTE, RENDERIZAÇÃO E CÁLCULO ---
 def render_dashboard():
@@ -24,7 +87,8 @@ def render_dashboard():
     cols = st.columns(len(categorias))
     for i, categoria in enumerate(categorias):
         with cols[i]:
-            with st.container(border=True): # O border=True original, simples e eficaz
+            # Container sem 'border=True' para que nosso CSS assuma o controle
+            with st.container():
                 st.subheader(categoria)
                 st.markdown(f"<small>{descricoes[categoria]}</small>", unsafe_allow_html=True)
                 st.markdown("---")
@@ -35,6 +99,8 @@ def render_dashboard():
                     st.session_state.orcamento_categoria = categoria
                     st.session_state.orcamento_step = 2
                     st.rerun()
+
+# --- TODO O RESTO DO CÓDIGO PERMANECE IDÊNTICO À VERSÃO 100% FUNCIONAL ---
 
 def get_sugestoes_entregaveis(categoria):
     sugestoes = {"Campanha Online": ["Criação de Key Visual (KV)", "Produção de Posts", "Produção de Vídeos (Reels)", "Gerenciamento de Tráfego", "Relatório de Performance"], "Campanha Offline": ["Identidade Visual do Evento", "Material Gráfico", "Ativação de Marca", "Produção de Brindes"], "Campanha 360": ["Planejamento Estratégico", "Conceito Criativo", "Desdobramento de Peças", "Plano de Mídia"], "Projeto Estratégico": ["Diagnóstico de Marca", "Planejamento de Crise", "Plataforma de Comunicação", "Assessoria de Imprensa"]}
@@ -65,8 +131,7 @@ def render_form_campanha_online():
             st.session_state.dados_briefing = dados_form
             st.session_state.orcamento_step = 3
             st.rerun()
-            
-# (As outras funções de formulário e backend permanecem as mesmas - incluídas para integridade do arquivo)
+
 def render_form_campanha_offline():
     with st.form(key="briefing_offline_form"):
         st.info("Detalhe a ação offline para estimarmos produção e logística.")
@@ -247,6 +312,7 @@ def main():
     elif st.session_state.current_view == "Novo Orçamento":
         if 'orcamento_step' not in st.session_state: st.session_state.current_view = "Painel Principal"; st.rerun()
         if st.button("⬅️ Voltar ao Painel"): st.session_state.current_view = 'Painel Principal'; st.rerun()
+        
         st.header(f"Briefing: {st.session_state.get('orcamento_categoria')}")
         cat = st.session_state.get('orcamento_categoria')
         
