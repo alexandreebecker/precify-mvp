@@ -1,5 +1,5 @@
 # ==============================================================================
-# Precify.AI - SPRINT 2.5 - Final UX Polish (Versão Estável e Definitiva)
+# Precify.AI - SPRINT 2.5 - Final Config Validation (Versão Estável e Definitiva)
 # ==============================================================================
 
 import streamlit as st
@@ -10,7 +10,6 @@ import json
 from datetime import date, timedelta
 
 # --- 1. CONFIGURAÇÃO DA PÁGINA E ESTILO CUSTOMIZADO ---
-# ALTERAÇÃO APLICADA AQUI: mudado de "auto" para "expanded"
 st.set_page_config(page_title="Precify.AI", layout="wide", initial_sidebar_state="expanded")
 
 def load_custom_css():
@@ -327,16 +326,26 @@ def main():
 
     elif st.session_state.current_view == "Configurações":
         st.header("Painel de Configuração da Agência")
-        with st.expander("Gerenciar Perfis", expanded=True):
+        
+        with st.expander("Gerenciar Perfis de Equipe", expanded=True):
+            perfis = carregar_perfis_equipe(db, agencia_id)
             with st.form("new_profile_form", clear_on_submit=True):
                 c1,c2=st.columns([2,1]); funcao=c1.text_input("Função"); custo=c2.number_input("Custo/Hora(R$)",0.0,step=5.0,format="%.2f")
-                if st.form_submit_button("Adicionar"):
+                if st.form_submit_button("Adicionar Perfil"):
+                    # --- MELHORIA APLICADA AQUI (VALIDAÇÃO) ---
+                    nomes_perfis_existentes = [p['funcao'].strip().lower() for p in perfis]
                     if funcao and custo > 0: 
-                        db.collection('agencias').document(agencia_id).collection('perfis_equipe').add({"funcao":funcao,"custo_hora":custo})
-                        st.toast("Adicionado!")
-                        st.cache_data.clear()
-                        st.rerun()
-            st.divider(); perfis=carregar_perfis_equipe(db, agencia_id)
+                        if funcao.strip().lower() in nomes_perfis_existentes:
+                            st.error(f"O perfil '{funcao}' já existe.")
+                        else:
+                            db.collection('agencias').document(agencia_id).collection('perfis_equipe').add({"funcao":funcao,"custo_hora":custo})
+                            st.toast("Adicionado!")
+                            st.cache_data.clear()
+                            st.rerun()
+                    else:
+                        st.warning("Preencha todos os campos para adicionar um perfil.")
+
+            st.divider()
             if perfis:
                 c1,c2,c3=st.columns([2,1,1]);c1.write("**Função**");c2.write("**Custo/Hora**")
                 for p in perfis:
@@ -345,20 +354,35 @@ def main():
                         db.collection('agencias').document(agencia_id).collection('perfis_equipe').document(p['id']).delete()
                         st.cache_data.clear()
                         st.rerun()
-        with st.form(key="form_config_financeiras"):
+        
+        st.divider()
+
+        with st.container(border=True):
             st.subheader("⚙️ Configurações Financeiras")
             configs = carregar_configuracoes_financeiras(db, agencia_id); defaults={"margem_lucro":20.0, "impostos":15.0, "custos_fixos":10.0, "taxa_coordenacao":10.0}
-            c1,c2=st.columns(2)
-            lucro = c1.number_input("Margem Lucro (%)", 0.0,value=configs.get("margem_lucro",defaults["margem_lucro"]))
-            impostos = c1.number_input("Impostos (%)", 0.0,value=configs.get("impostos",defaults["impostos"]))
-            fixos = c2.number_input("Custos Fixos (%)", 0.0,value=configs.get("custos_fixos",defaults["custos_fixos"]))
-            coord = c2.number_input("Taxa Coord. (%)", 0.0,value=configs.get("taxa_coordenacao",defaults["taxa_coordenacao"]))
-            if st.form_submit_button("Salvar"):
-                novas_configs = {"margem_lucro":lucro, "impostos":impostos, "custos_fixos":fixos, "taxa_coordenacao":coord}
-                db.collection('agencias').document(agencia_id).set({"configuracoes_financeiras": novas_configs}, merge=True)
-                st.cache_data.clear()
-                st.success("Salvo!")
-                st.rerun()
+
+            # --- MELHORIA APLICADA AQUI (VISUALIZAÇÃO) ---
+            st.write("**Valores Atuais:**")
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Margem de Lucro", f"{configs.get('margem_lucro', 0):.1f}%")
+            c2.metric("Custos Fixos", f"{configs.get('custos_fixos', 0):.1f}%")
+            c3.metric("Impostos", f"{configs.get('impostos', 0):.1f}%")
+            c4.metric("Taxa de Coordenação", f"{configs.get('taxa_coordenacao', 0):.1f}%")
+            st.divider()
+
+            with st.form(key="form_config_financeiras"):
+                st.write("**Editar Valores:**")
+                c1,c2=st.columns(2)
+                lucro = c1.number_input("Margem Lucro (%)", 0.0,value=configs.get("margem_lucro",defaults["margem_lucro"]))
+                impostos = c1.number_input("Impostos (%)", 0.0,value=configs.get("impostos",defaults["impostos"]))
+                fixos = c2.number_input("Custos Fixos (%)", 0.0,value=configs.get("custos_fixos",defaults["custos_fixos"]))
+                coord = c2.number_input("Taxa Coord. (%)", 0.0,value=configs.get("taxa_coordenacao",defaults["taxa_coordenacao"]))
+                if st.form_submit_button("Salvar Novas Configurações"):
+                    novas_configs = {"margem_lucro":lucro, "impostos":impostos, "custos_fixos":fixos, "taxa_coordenacao":coord}
+                    db.collection('agencias').document(agencia_id).set({"configuracoes_financeiras": novas_configs}, merge=True)
+                    st.cache_data.clear()
+                    st.success("Salvo!")
+                    st.rerun()
 
 if __name__ == '__main__':
     main()
