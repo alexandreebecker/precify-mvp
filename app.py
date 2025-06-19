@@ -1,121 +1,16 @@
 # ==============================================================================
-# Precify.AI - SPRINT 2.5 - "WOW FACTOR" Final Fix (Versão Estável e Definitiva)
+# Precify.AI - SPRINT 2.5 - STABLE BASELINE (Functional and Verified)
 # ==============================================================================
-
 import streamlit as st
 import firebase_admin
 from firebase_admin import credentials, firestore, auth
-import pandas as pd
 import json
 from datetime import date, timedelta
 
-# --- 1. CONFIGURAÇÃO DA PÁGINA E ESTILO CUSTOMIZADO ---
+# --- 1. CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="Precify.AI", layout="wide", initial_sidebar_state="expanded")
 
-def load_custom_css():
-    # Removido o config.toml. O CSS agora é a única fonte da verdade.
-    st.markdown("""
-        <style>
-            /* --- FONTES DO GOOGLE --- */
-            @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&family=Inter:wght@400;700&display=swap');
-
-            /* --- DEFINIÇÃO DE VARIÁVEIS DE COR --- */
-            :root {
-                --primary-color: #4F8BF9;
-                --gradient-start: #5D5FEF;
-                --gradient-end: #4F8BF9;
-                --accent-color: #F62B7C; /* Magenta Vibrante */
-                --background-color: #F0F2F6;
-                --secondary-background-color: #FFFFFF;
-                --text-color: #262730;
-                --light-gray: #E6EAF1;
-            }
-
-            /* --- ESTILO GERAL DO CORPO --- */
-            html, body, .stApp {
-                font-family: 'Inter', sans-serif;
-                background: linear-gradient(180deg, #F0F2F6 0%, #E6EAF1 100%);
-            }
-
-            h1, h2, h3, h4, h5, h6 {
-                font-family: 'Poppins', sans-serif;
-                font-weight: 600;
-            }
-
-            /* --- ANIMAÇÕES --- */
-            @keyframes fadeIn {
-                from { opacity: 0; transform: translateY(10px); }
-                to { opacity: 1; transform: translateY(0); }
-            }
-            
-            .main .block-container {
-                 animation: fadeIn 0.5s ease-out forwards;
-                 opacity: 0;
-            }
-
-            /* --- CARDS DO DASHBOARD (O "WOW") --- */
-            div[data-testid="stVerticalBlock"] > [data-testid="stHorizontalBlock"] > [data-testid="stVerticalBlock"] {
-                border: 1px solid var(--light-gray);
-                background-color: var(--secondary-background-color);
-                border-radius: 12px;
-                padding: 25px;
-                box-shadow: 0 8px 16px rgba(0,0,0,0.04);
-                transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
-                will-change: transform, box-shadow;
-            }
-
-            div[data-testid="stVerticalBlock"] > [data-testid="stHorizontalBlock"] > [data-testid="stVerticalBlock"]:hover {
-                transform: translateY(-5px) scale(1.02);
-                box-shadow: 0 12px 24px rgba(93, 95, 239, 0.1), 0 5px 10px rgba(246, 43, 124, 0.1);
-                border-color: var(--accent-color);
-            }
-            
-            /* --- BOTÕES --- */
-            .stButton>button {
-                border-radius: 8px;
-                transition: all 0.2s ease-out;
-                border: none;
-                font-weight: 600;
-            }
-
-            .stButton>button:hover {
-                transform: translateY(-2px);
-                filter: brightness(1.1);
-            }
-            
-            /* Botão primário (com gradiente) */
-            .stButton>button[kind="primary"] {
-                color: white;
-                background: linear-gradient(45deg, var(--gradient-start), var(--gradient-end));
-                box-shadow: 0 4px 15px rgba(93, 95, 239, 0.3);
-            }
-            .stButton>button[kind="primary"]:hover {
-                box-shadow: 0 6px 20px rgba(93, 95, 239, 0.4);
-            }
-            
-            /* --- SIDEBAR --- */
-            [data-testid="stSidebar"] {
-                border-right: 1px solid var(--light-gray);
-                background-color: var(--secondary-background-color);
-            }
-            [data-testid="stSidebar"] .stButton>button {
-                 text-align: left;
-                 padding-left: 20px;
-            }
-            [data-testid="stSidebar"] .stButton>button[kind="secondary"] {
-                 background-color: transparent;
-                 color: #555;
-            }
-             [data-testid="stSidebar"] .stButton>button[kind="primary"] {
-                 box-shadow: none; /* Remover sombra do botão ativo na sidebar */
-            }
-
-        </style>
-        """, unsafe_allow_html=True)
-
-load_custom_css()
-
-# O resto do código permanece idêntico à versão funcional.
+# --- 2. FUNÇÕES DE SUPORTE, RENDERIZAÇÃO E CÁLCULO ---
 def render_dashboard():
     st.header("Painel Principal")
     st.caption("Selecione um tipo de projeto para iniciar um novo orçamento.")
@@ -129,7 +24,7 @@ def render_dashboard():
     cols = st.columns(len(categorias))
     for i, categoria in enumerate(categorias):
         with cols[i]:
-            with st.container():
+            with st.container(border=True): # O border=True original, simples e eficaz
                 st.subheader(categoria)
                 st.markdown(f"<small>{descricoes[categoria]}</small>", unsafe_allow_html=True)
                 st.markdown("---")
@@ -156,14 +51,7 @@ def render_form_campanha_online():
             dados_form['canais'] = st.multiselect("Canais digitais", ["Instagram", "TikTok", "YouTube", "Facebook", "LinkedIn", "Google Ads", "Outro"])
             dados_form['pecas_estimadas'] = st.number_input("Quantidade de peças", min_value=1, step=1, value=10)
             midia_paga_selecao = st.radio("Haverá mídia paga?", ("Não", "Sim"), horizontal=True, key="online_midia")
-            verba_midia = st.number_input(
-                "Verba de mídia (R$)", 
-                min_value=0.0, 
-                step=100.0, 
-                format="%.2f", 
-                disabled=(midia_paga_selecao == "Não")
-            )
-
+            verba_midia = st.number_input("Verba de mídia (R$)", min_value=0.0, step=100.0, format="%.2f", disabled=(midia_paga_selecao == "Não"))
         with col2:
             dados_form['publico_alvo'] = st.text_area("Público-alvo")
             dados_form['urgencia'] = st.select_slider("Urgência", ["Baixa", "Média", "Alta"], value="Média")
@@ -171,15 +59,14 @@ def render_form_campanha_online():
             if len(periodo) == 2: dados_form['periodo_inicio'], dados_form['periodo_fim'] = str(periodo[0]), str(periodo[1])
             pos_campanha = st.radio("Acompanhamento pós-campanha?", ("Não", "Sim"), horizontal=True, key="online_pos")
             dados_form['pos_campanha'] = (pos_campanha == "Sim")
-        
         if st.form_submit_button("Avançar para Escopo ➡️"):
             dados_form['midia_paga'] = (midia_paga_selecao == "Sim")
-            if dados_form['midia_paga']:
-                dados_form['verba_midia'] = verba_midia
+            if dados_form['midia_paga']: dados_form['verba_midia'] = verba_midia
             st.session_state.dados_briefing = dados_form
             st.session_state.orcamento_step = 3
             st.rerun()
-
+            
+# (As outras funções de formulário e backend permanecem as mesmas - incluídas para integridade do arquivo)
 def render_form_campanha_offline():
     with st.form(key="briefing_offline_form"):
         st.info("Detalhe a ação offline para estimarmos produção e logística.")
@@ -247,7 +134,6 @@ def calcular_orcamento(entregaveis, configs):
             "valor_lucro": lucro, "subtotal_antes_impostos": sub_impostos, "valor_impostos": impostos,
             "valor_total_cliente": total}
 
-# --- 3. FUNÇÕES DE DADOS (FIRESTORE) E AUTH ---
 @st.cache_resource
 def initialize_firebase():
     try:
@@ -289,7 +175,6 @@ def sign_up(email, password, name):
         st.success("Registrado!")
     except Exception as e: st.error(f"Erro registro: {e}")
 
-# --- 4. INICIALIZAÇÃO E LÓGICA PRINCIPAL ---
 db = initialize_firebase()
 
 def main():
@@ -362,7 +247,6 @@ def main():
     elif st.session_state.current_view == "Novo Orçamento":
         if 'orcamento_step' not in st.session_state: st.session_state.current_view = "Painel Principal"; st.rerun()
         if st.button("⬅️ Voltar ao Painel"): st.session_state.current_view = 'Painel Principal'; st.rerun()
-        
         st.header(f"Briefing: {st.session_state.get('orcamento_categoria')}")
         cat = st.session_state.get('orcamento_categoria')
         
@@ -439,7 +323,6 @@ def main():
                             st.rerun()
                     else:
                         st.warning("Preencha todos os campos para adicionar um perfil.")
-
             st.divider()
             if perfis:
                 c1,c2,c3=st.columns([2,1,1]);c1.write("**Função**");c2.write("**Custo/Hora**")
@@ -449,13 +332,11 @@ def main():
                         db.collection('agencias').document(agencia_id).collection('perfis_equipe').document(p['id']).delete()
                         st.cache_data.clear()
                         st.rerun()
-        
         st.divider()
 
         with st.container(border=True):
             st.subheader("⚙️ Configurações Financeiras")
             configs = carregar_configuracoes_financeiras(db, agencia_id); defaults={"margem_lucro":20.0, "impostos":15.0, "custos_fixos":10.0, "taxa_coordenacao":10.0}
-
             st.write("**Valores Atuais:**")
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("Margem de Lucro", f"{configs.get('margem_lucro', 0):.1f}%")
@@ -463,7 +344,6 @@ def main():
             c3.metric("Impostos", f"{configs.get('impostos', 0):.1f}%")
             c4.metric("Taxa de Coordenação", f"{configs.get('taxa_coordenacao', 0):.1f}%")
             st.divider()
-
             with st.form(key="form_config_financeiras"):
                 st.write("**Editar Valores:**")
                 c1,c2=st.columns(2)
@@ -477,6 +357,5 @@ def main():
                     st.cache_data.clear()
                     st.success("Salvo!")
                     st.rerun()
-
 if __name__ == '__main__':
     main()
