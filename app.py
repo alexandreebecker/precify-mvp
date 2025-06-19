@@ -1,5 +1,5 @@
 # ==============================================================================
-# Precify.AI - SPRINT 2.5 - FINAL STABLE BASELINE. NO MORE BUGS.
+# Precify.AI - SPRINT 2.5 - COMPLETE REVERT TO STABLE BASELINE
 # ==============================================================================
 import streamlit as st
 import firebase_admin
@@ -10,16 +10,12 @@ from datetime import date, timedelta
 # --- 1. CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="Precify.AI", layout="wide", initial_sidebar_state="expanded")
 
-# --- NENHUM CSS CUSTOMIZADO. RISCO ZERO. ---
+# --- SEM CSS CUSTOMIZADO. RISCO ZERO. ---
 
 # --- 2. FUNÇÕES DE SUPORTE, RENDERIZAÇÃO E CÁLCULO ---
 def render_dashboard(nome_usuario):
     # LÓGICA DE BOAS-VINDAS À PROVA DE FALHAS
-    if nome_usuario and isinstance(nome_usuario, str) and nome_usuario.strip():
-        welcome_message = f"Bem-vindo, {nome_usuario.split()[0]}!"
-    else:
-        welcome_message = "Painel Principal" # Fallback seguro
-    st.header(welcome_message)
+    st.header("Painel Principal") # VOLTANDO PARA O TÍTULO SIMPLES E FUNCIONAL
     st.caption("Selecione um tipo de projeto para iniciar um novo orçamento.")
 
     descricoes = {
@@ -29,11 +25,6 @@ def render_dashboard(nome_usuario):
         "Projeto Estratégico": "Consultoria, gestão de crise, branding e posicionamento de marca."
     }
     
-    # LÓGICA DE ALINHAMENTO GARANTIDO: PADRONIZA O TAMANHO DAS DESCRIÇÕES
-    max_len = 0
-    for desc in descricoes.values():
-        max_len = max(max_len, len(desc))
-
     categorias = list(descricoes.keys())
     cols = st.columns(len(categorias))
     
@@ -41,14 +32,8 @@ def render_dashboard(nome_usuario):
         with cols[i]:
             with st.container(border=True): # USANDO O CONTAINER NATIVO E SEGURO
                 st.subheader(categoria)
-                
-                desc_atual = descricoes[categoria]
-                padding_needed = max_len - len(desc_atual)
-                # Adiciona espaços invisíveis para forçar o alinhamento
-                padded_desc = f"{desc_atual}{' ' * int(padding_needed*0.4)}"
-                
-                st.markdown(f"<small>{padded_desc}</small>", unsafe_allow_html=True)
-                st.markdown("<br>", unsafe_allow_html=True) # Força um espaço extra para o botão
+                st.markdown(f"<small>{descricoes[categoria]}</small>", unsafe_allow_html=True)
+                st.markdown("<br>", unsafe_allow_html=True) # Espaço para alinhar visualmente
                 st.button("Iniciar", key=f"start_{categoria}", use_container_width=True)
     
     # Processamento de Ações
@@ -276,6 +261,7 @@ def main():
     elif st.session_state.current_view == "Novo Orçamento":
         if 'orcamento_step' not in st.session_state: st.session_state.current_view = "Painel Principal"; st.rerun()
         if st.button("⬅️ Voltar ao Painel"): st.session_state.current_view = 'Painel Principal'; st.rerun()
+        
         st.header(f"Briefing: {st.session_state.get('orcamento_categoria')}")
         cat = st.session_state.get('orcamento_categoria')
         
