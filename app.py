@@ -1,5 +1,5 @@
 # ==============================================================================
-# Precify.AI - SPRINT 2.5 - FINAL RECOVERY. STABLE AND FUNCTIONAL.
+# Precify.AI - SPRINT 2.5 - FINAL RECOVERY. STABLE BASELINE GUARANTEED.
 # ==============================================================================
 import streamlit as st
 import firebase_admin
@@ -7,56 +7,18 @@ from firebase_admin import credentials, firestore, auth
 import json
 from datetime import date, timedelta
 
-# --- 1. CONFIGURAÇÃO DA PÁGINA E ESTILO ---
+# --- 1. CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="Precify.AI", layout="wide", initial_sidebar_state="expanded")
 
-def load_custom_css():
-    st.markdown("""
-        <style>
-            @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&family=Inter:wght@400;700&display=swap');
+# --- SEM CSS CUSTOMIZADO PARA LAYOUT. RISCO ZERO. ---
 
-            /* --- ESTILO GERAL E SEGURO --- */
-            html, body, .stApp {
-                font-family: 'Inter', sans-serif;
-                background-color: #F0F2F6;
-            }
-            h1, h2, h3 {
-                font-family: 'Poppins', sans-serif;
-                font-weight: 600;
-            }
-            
-            /* --- LAYOUT DOS CARDS (À PROVA DE FALHAS) --- */
-            .card-grid {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 1rem;
-            }
-            .card {
-                background-color: #FFFFFF;
-                border: 1px solid #E6EAF1; /* Borda visível */
-                border-radius: 12px;
-                padding: 25px;
-                box-shadow: 0 4px 6px rgba(0,0,0,0.04);
-                height: 100%; /* Força o card a ocupar a altura da coluna */
-                display: flex;
-                flex-direction: column;
-                justify-content: space-between; /* Alinha o botão no fundo */
-            }
-            .card-content {
-                flex-grow: 1; /* Faz o conteúdo crescer e empurrar o botão */
-            }
-        </style>
-    """, unsafe_allow_html=True)
-
-load_custom_css()
-
-# --- 2. FUNÇÕES DE SUPORTE E RENDERIZAÇÃO ---
+# --- 2. FUNÇÕES DE SUPORTE, RENDERIZAÇÃO E CÁLCULO ---
 def render_dashboard(nome_usuario):
-    # LÓGICA DE BOAS-VINDAS CORRIGIDA E SEGURA
+    # LÓGICA DE BOAS-VINDAS À PROVA DE FALHAS
     if nome_usuario and isinstance(nome_usuario, str) and nome_usuario.strip():
         welcome_message = f"Bem-vindo, {nome_usuario.split()[0]}!"
     else:
-        welcome_message = "Painel Principal"
+        welcome_message = "Painel Principal" # Fallback seguro
     st.header(welcome_message)
     st.caption("Selecione um tipo de projeto para iniciar um novo orçamento.")
 
@@ -67,35 +29,36 @@ def render_dashboard(nome_usuario):
         "Projeto Estratégico": "Consultoria, gestão de crise, branding e posicionamento de marca."
     }
     
+    # LÓGICA DE ALINHAMENTO GARANTIDO: PADRONIZA O TAMANHO DAS DESCRIÇÕES
+    # Calcula o número máximo de linhas que a maior descrição ocupa
+    max_lines = 0
+    for desc in descricoes.values():
+        lines = desc.count('\n') + 1 # Conta quebras de linha explícitas + 1
+        # Simula quebras de linha por largura (aproximação)
+        max_lines = max(max_lines, lines + len(desc) // 50) 
+        
     categorias = list(descricoes.keys())
     cols = st.columns(len(categorias))
     
-    for i, col in enumerate(cols):
-        with col:
-            categoria = categorias[i]
-            # USANDO NOSSAS PRÓPRIAS CLASSES CSS PARA CONTROLE TOTAL
-            st.markdown('<div class="card">', unsafe_allow_html=True)
-            
-            # Conteúdo do card
-            st.markdown('<div class="card-content">', unsafe_allow_html=True)
-            st.subheader(categoria)
-            st.markdown(f"<small>{descricoes[categoria]}</small>", unsafe_allow_html=True)
-            st.markdown('</div>', unsafe_allow_html=True)
-            
-            # Botão
-            if st.button("Iniciar", key=f"start_{categoria}", use_container_width=True):
-                st.session_state.action = ("navigate_to_orcamento", categoria)
-            
-            st.markdown('</div>', unsafe_allow_html=True)
-
-    # Lógica de Navegação
-    if "action" in st.session_state and st.session_state.action:
-        action_type, action_payload = st.session_state.action
-        st.session_state.action = None
-        if action_type == "navigate_to_orcamento":
+    for i, categoria in enumerate(categorias):
+        with cols[i]:
+            with st.container(border=True): # USANDO O CONTAINER NATIVO E SEGURO
+                st.subheader(categoria)
+                
+                # Adiciona quebras de linha invisíveis para alinhar
+                current_lines = descricoes[categoria].count('\n') + 1 + len(descricoes[categoria]) // 50
+                padding_lines = max_lines - current_lines
+                padded_desc = descricoes[categoria] + ("<br>" * padding_lines)
+                
+                st.markdown(f"<small>{padded_desc}</small>", unsafe_allow_html=True)
+                st.button("Iniciar", key=f"start_{categoria}", use_container_width=True)
+    
+    # Processamento de Ações
+    for categoria in categorias:
+        if st.session_state.get(f"start_{categoria}"):
             for k in [k for k in st.session_state if k.startswith(('orcamento_'))]: del st.session_state[k]
             st.session_state.current_view = "Novo Orçamento"
-            st.session_state.orcamento_categoria = action_payload
+            st.session_state.orcamento_categoria = categoria
             st.session_state.orcamento_step = 2
             st.rerun()
 
