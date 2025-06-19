@@ -1,5 +1,5 @@
 # ==============================================================================
-# Precify.AI - SPRINT 2.5 - Navigation Hotfix (Versão Completa e Estável)
+# Precify.AI - SPRINT 2.5 - Final Navigation Fix (Versão Definitiva e Estável)
 # ==============================================================================
 
 import streamlit as st
@@ -13,61 +13,47 @@ from datetime import date, timedelta
 st.set_page_config(page_title="Precify.AI", layout="wide", initial_sidebar_state="auto")
 
 def load_custom_css():
-    """ Injeta CSS customizado para polir a aparência da aplicação. """
     st.markdown("""
         <style>
-            /* Melhora a aparência dos cards no dashboard */
             div[data-testid="stVerticalBlock"] > [data-testid="stHorizontalBlock"] > [data-testid="stVerticalBlock"] {
-                border: 1px solid #E6EAF1; /* Borda sutil */
-                border-radius: 10px;
-                padding: 20px;
-                box-shadow: 0 4px 8px 0 rgba(0,0,0,0.05); /* Sombra mais leve */
+                border: 1px solid #E6EAF1; border-radius: 10px; padding: 20px;
+                box-shadow: 0 4px 8px 0 rgba(0,0,0,0.05);
                 transition: box-shadow 0.3s ease-in-out, transform 0.2s ease-in-out;
                 transform: scale(1);
             }
             div[data-testid="stVerticalBlock"] > [data-testid="stHorizontalBlock"] > [data-testid="stVerticalBlock"]:hover {
-                box-shadow: 0 6px 12px 0 rgba(0,0,0,0.1);
-                transform: scale(1.02);
+                box-shadow: 0 6px 12px 0 rgba(0,0,0,0.1); transform: scale(1.02);
             }
-            /* Garante que o botão dentro do card ocupe a largura total */
             div[data-testid="stVerticalBlock"] > [data-testid="stHorizontalBlock"] > [data-testid="stVerticalBlock"] .stButton>button {
                 width: 100%;
             }
         </style>
         """, unsafe_allow_html=True)
 
-# Carrega o CSS customizado no início da execução
 load_custom_css()
 
 # --- 2. FUNÇÕES DE SUPORTE, RENDERIZAÇÃO E CÁLCULO ---
-
 def render_dashboard():
     st.header("Painel Principal")
     st.caption("Selecione um tipo de projeto para iniciar um novo orçamento.")
-
     descricoes = {
         "Campanha Online": "Projetos focados em mídias digitais, redes sociais, e geração de leads.",
         "Campanha Offline": "Para eventos, materiais impressos, ativações de marca e mídia OOH.",
         "Campanha 360": "Ações integradas que combinam o mundo online e offline.",
         "Projeto Estratégico": "Consultoria, gestão de crise, branding e posicionamento de marca."
     }
-    categorias = list(descricoes.keys())
-    cols = st.columns(len(categorias))
-
-    for i, categoria in enumerate(categorias):
-        with cols[i]:
+    for i, (categoria, desc) in enumerate(st.columns(len(descricoes))):
+        with desc:
+            cat_key = list(descricoes.keys())[i]
             with st.container():
-                st.subheader(categoria)
-                st.markdown(f"<small>{descricoes[categoria]}</small>", unsafe_allow_html=True)
+                st.subheader(cat_key)
+                st.markdown(f"<small>{descricoes[cat_key]}</small>", unsafe_allow_html=True)
                 st.markdown("---")
-                if st.button("Iniciar", key=f"start_{categoria.lower().replace(' ', '_')}", use_container_width=True):
-                    # Limpa estados de orçamentos anteriores
+                if st.button("Iniciar", key=f"start_{cat_key.lower().replace(' ', '_')}", use_container_width=True):
                     for k in [k for k in st.session_state if k.startswith(('orcamento_', 'dados_briefing', 'entregaveis'))]:
                         del st.session_state[k]
-                    
-                    # Define a nova view e os dados iniciais do orçamento
                     st.session_state.current_view = "Novo Orçamento"
-                    st.session_state.orcamento_categoria = categoria
+                    st.session_state.orcamento_categoria = cat_key
                     st.session_state.orcamento_step = 2
                     st.rerun()
 
@@ -213,171 +199,166 @@ db = initialize_firebase()
 def main():
     if db is None: st.stop()
 
+    # Inicialização do estado da sessão
     if 'logged_in' not in st.session_state: st.session_state.logged_in = False
-
+    if 'current_view' not in st.session_state: st.session_state.current_view = "Painel Principal"
+    
+    # Roteador de Login
     if not st.session_state.logged_in:
         st.title("Bem-vindo ao Precify.AI"); choice = st.selectbox("Acessar", ["Login", "Registrar"], label_visibility="collapsed")
         if choice == "Login":
             with st.form("login_form"):
                 email=st.text_input("Email"); password=st.text_input("Senha",type="password")
                 if st.form_submit_button("Login"):
-                    try: user=auth.get_user_by_email(email); st.session_state.logged_in=True; st.session_state.user_info={"name":user.display_name,"email":user.email,"uid":user.uid}; st.rerun()
+                    try: 
+                        user=auth.get_user_by_email(email)
+                        st.session_state.logged_in=True
+                        st.session_state.user_info={"name":user.display_name,"email":user.email,"uid":user.uid}
+                        st.session_state.current_view = "Painel Principal" # Garante que sempre comece no painel
+                        st.rerun()
                     except Exception: st.error("Credenciais inválidas.")
         else:
             with st.form("register_form"):
                 name=st.text_input("Nome"); email=st.text_input("Email"); password=st.text_input("Senha",type="password")
                 if st.form_submit_button("Registrar"): sign_up(email, password, name)
-    else:
-        user_info=st.session_state.user_info; agencia_id=user_info['uid']; nome=user_info.get('name')
-        st.sidebar.title(f"Olá, {nome.split()[0]}!" if nome and nome.strip() else "Olá!")
-        if st.sidebar.button("Logout"):
+        return # Encerra a execução aqui para não logados
+
+    # --- LÓGICA DA APLICAÇÃO PARA USUÁRIOS LOGADOS ---
+    user_info=st.session_state.user_info; agencia_id=user_info['uid']; nome=user_info.get('name')
+
+    # Menu Lateral (Sidebar)
+    with st.sidebar:
+        st.title(f"Olá, {nome.split()[0]}!" if nome and nome.strip() else "Olá!")
+        if st.button("Logout"):
             for k in list(st.session_state.keys()): del st.session_state[k]
             st.rerun()
-        st.sidebar.divider()
-        
-        # --- CORREÇÃO DE NAVEGAÇÃO ---
-        # Função callback que será chamada QUANDO o usuário clicar no menu
-        def change_view():
-            st.session_state.current_view = st.session_state.sidebar_selection
-            # Limpa o estado do orçamento se o usuário sair do fluxo
-            if st.session_state.current_view != "Novo Orçamento":
-                for k in [k for k in st.session_state if k.startswith('orcamento_')]:
-                    del st.session_state[k]
+        st.divider()
 
-        # Lógica para definir a view inicial e o índice do menu
-        all_valid_views = ["Painel Principal", "Novo Orçamento", "Meus Orçamentos", "Configurações"]
         sidebar_view_options = ["Painel Principal", "Meus Orçamentos", "Configurações"]
-        if 'current_view' not in st.session_state or st.session_state.current_view not in all_valid_views:
-            st.session_state.current_view = "Painel Principal"
+        # O menu não controla mais a tela, apenas reflete o estado ou o muda se clicado
+        for view_option in sidebar_view_options:
+            # Usa um botão para cada item do menu para um controle explícito
+            if st.button(view_option, use_container_width=True, type="primary" if st.session_state.current_view == view_option else "secondary"):
+                st.session_state.current_view = view_option
+                # Limpa estado de orçamento se sair do fluxo
+                if view_option != "Novo Orçamento":
+                    for k in [k for k in st.session_state if k.startswith(('orcamento_', 'dados_briefing', 'entregaveis'))]:
+                        del st.session_state[k]
+                st.rerun()
+    
+    # Redirecionamento após salvar
+    if st.session_state.get('redirect_to_orcamentos', False):
+        st.session_state.current_view = "Meus Orçamentos"
+        del st.session_state['redirect_to_orcamentos']
+        st.rerun()
+
+    # Roteador de Telas Principal
+    if st.session_state.current_view == "Painel Principal":
+        render_dashboard()
+    
+    elif st.session_state.current_view == "Meus Orçamentos":
+        st.header("Histórico de Orçamentos")
+        orcamentos_data = carregar_orcamentos(db, agencia_id)
+        if not orcamentos_data: st.info("Nenhum orçamento salvo ainda.")
+        else:
+            for orc_data in orcamentos_data:
+                res = orc_data.get('resultado_financeiro', {}); data_orc = orc_data.get('data_orcamento')
+                data_formatada = data_orc.strftime("%d/%m/%Y") if hasattr(data_orc, 'strftime') else "Sem data"
+                with st.expander(f"**{orc_data.get('nome_cliente', 'N/A')}** | {data_formatada} | **R$ {res.get('valor_total_cliente', 0):.2f}**"):
+                    st.subheader("Detalhes do Orçamento")
+                    st.markdown(f"**Custo Equipe:** `R$ {res.get('custo_total_equipe', 0):.2f}` | **Tx. Coordenação:** `R$ {res.get('valor_taxa_coordenacao', 0):.2f}` | **Custos Fixos:** `R$ {res.get('valor_custos_fixos', 0):.2f}` | **Lucro:** `R$ {res.get('valor_lucro', 0):.2f}` | **Impostos:** `R$ {res.get('valor_impostos', 0):.2f}`")
+                    st.subheader("Escopo Final")
+                    for item in orc_data.get('escopo_final', []):
+                        if isinstance(item, dict) and 'descricao' in item: st.write(f"- {item.get('descricao', 'Item sem descrição')}")
+                    st.subheader("Dados do Briefing")
+                    for k, v in orc_data.get('briefing', {}).items(): st.markdown(f"**{k.replace('_', ' ').title()}:** {v}")
+
+    elif st.session_state.current_view == "Novo Orçamento":
+        if 'orcamento_step' not in st.session_state: st.session_state.current_view = "Painel Principal"; st.rerun()
+        if st.button("⬅️ Voltar ao Painel"): st.session_state.current_view = 'Painel Principal'; st.rerun()
         
-        # Redireciona para Meus Orçamentos após salvar um
-        if st.session_state.get('redirect_to_orcamentos', False):
-            st.session_state.current_view = "Meus Orçamentos"
-            del st.session_state['redirect_to_orcamentos']
-
-        # Determina o índice do menu com base na view atual
-        try:
-            current_index = sidebar_view_options.index(st.session_state.current_view)
-        except ValueError:
-            # Se a view atual é "Novo Orçamento", mantém a seleção do menu em "Painel Principal"
-            current_index = 0
+        st.header(f"Briefing: {st.session_state.get('orcamento_categoria')}")
+        cat = st.session_state.get('orcamento_categoria')
         
-        # Renderiza o menu. A chave 'sidebar_selection' armazena a escolha do usuário.
-        st.sidebar.radio(
-            "Menu",
-            sidebar_view_options,
-            index=current_index,
-            key='sidebar_selection', # Chave para o valor do widget
-            on_change=change_view # Função a ser executada na mudança
-        )
+        if st.session_state.orcamento_step == 2:
+            if cat=="Campanha Online": render_form_campanha_online()
+            elif cat=="Campanha Offline": render_form_campanha_offline()
+            elif cat=="Campanha 360": render_form_campanha_360()
+            elif cat=="Projeto Estratégico": render_form_projeto_estrategico()
+
+        elif st.session_state.orcamento_step == 3:
+            st.header("🤖 Validação do Escopo")
+            if 'entregaveis' not in st.session_state: st.session_state.entregaveis = [{"descricao": item} for item in get_sugestoes_entregaveis(cat)]
+            c1,c2=st.columns([3,1]); novo=c1.text_input("Novo",label_visibility="collapsed")
+            if c2.button("Adicionar",use_container_width=True) and novo: st.session_state.entregaveis.append({"descricao":novo}); st.rerun()
+            for i, item in enumerate(st.session_state.entregaveis):
+                c1,c2=st.columns([4,1]); c1.write(f"• {item['descricao']}")
+                if c2.button("Remover", key=f"rm_{i}",use_container_width=True): st.session_state.entregaveis.pop(i); st.rerun()
+            st.divider(); c1,c2=st.columns(2)
+            if c1.button("⬅️ Editar Briefing"): st.session_state.orcamento_step=2; st.rerun()
+            if c2.button("Avançar para Alocação ➡️",type="primary",use_container_width=True,disabled=not st.session_state.entregaveis): st.session_state.orcamento_step=4; st.rerun()
         
-        # Roteador de telas principal
-        if st.session_state.current_view == "Painel Principal":
-            render_dashboard()
-        
-        elif st.session_state.current_view == "Meus Orçamentos":
-            st.header("Histórico de Orçamentos")
-            orcamentos_data = carregar_orcamentos(db, agencia_id)
-            if not orcamentos_data: st.info("Nenhum orçamento salvo ainda.")
-            else:
-                for orc_data in orcamentos_data:
-                    res = orc_data.get('resultado_financeiro', {}); data_orc = orc_data.get('data_orcamento')
-                    data_formatada = data_orc.strftime("%d/%m/%Y") if hasattr(data_orc, 'strftime') else "Sem data"
-                    with st.expander(f"**{orc_data.get('nome_cliente', 'N/A')}** | {data_formatada} | **R$ {res.get('valor_total_cliente', 0):.2f}**"):
-                        st.subheader("Detalhes do Orçamento")
-                        st.markdown(f"**Custo Equipe:** `R$ {res.get('custo_total_equipe', 0):.2f}` | **Tx. Coordenação:** `R$ {res.get('valor_taxa_coordenacao', 0):.2f}` | **Custos Fixos:** `R$ {res.get('valor_custos_fixos', 0):.2f}` | **Lucro:** `R$ {res.get('valor_lucro', 0):.2f}` | **Impostos:** `R$ {res.get('valor_impostos', 0):.2f}`")
-                        
-                        st.subheader("Escopo Final")
-                        for item in orc_data.get('escopo_final', []):
-                            if isinstance(item, dict) and 'descricao' in item:
-                                st.write(f"- {item.get('descricao', 'Item sem descrição')}")
+        elif st.session_state.orcamento_step == 4:
+            st.header("👨‍💻 Alocação de Horas")
+            perfis = carregar_perfis_equipe(db, agencia_id)
+            if not perfis: st.warning("Cadastre perfis em 'Configurações'."); st.stop()
+            nomes_perfis = [p['funcao'] for p in perfis]; total_h = 0
+            for i, entr in enumerate(st.session_state.entregaveis):
+                if 'alocacoes' not in entr: entr['alocacoes']=[]
+                horas_e = sum(a['horas'] for a in entr['alocacoes']); total_h += horas_e
+                with st.expander(f"**{i+1}. {entr['descricao']}** ({horas_e}h)"):
+                    for j, aloc in enumerate(entr['alocacoes']):
+                        c1,c2,c3=st.columns([2,1,1]); c1.write(f"• {aloc['perfil_funcao']}"); c2.write(f"{aloc['horas']}h")
+                        if c3.button("X",key=f"rem_{i}_{j}"): st.session_state.entregaveis[i]['alocacoes'].pop(j); st.rerun()
+                    st.divider(); c1,c2,c3=st.columns([2,1,1]); sel=c1.selectbox("Perfil",nomes_perfis,key=f"sel_{i}",index=None); h=c2.number_input("Horas",0.5,step=0.5,key=f"h_{i}")
+                    if c3.button("Adicionar",key=f"add_{i}",disabled=not sel):
+                        p_data = next((p for p in perfis if p['funcao']==sel),None)
+                        if p_data: st.session_state.entregaveis[i]['alocacoes'].append({"perfil_id":p_data['id'],"perfil_funcao":p_data['funcao'],"custo_hora":p_data['custo_hora'],"horas":h}); st.rerun()
+            st.divider(); st.header(f"Total Horas: {total_h}h")
+            c1,c2=st.columns(2)
+            if c1.button("⬅️ Editar Escopo"): st.session_state.orcamento_step=3; st.rerun()
+            if c2.button("Calcular Orçamento ➡️",type="primary",use_container_width=True,disabled=(total_h==0)): st.session_state.orcamento_step=5; st.rerun()
 
-                        st.subheader("Dados do Briefing")
-                        for k, v in orc_data.get('briefing', {}).items():
-                            st.markdown(f"**{k.replace('_', ' ').title()}:** {v}")
+        elif st.session_state.orcamento_step == 5:
+            st.header("📊 Orçamento Preliminar")
+            configs = carregar_configuracoes_financeiras(db, agencia_id)
+            if not configs: st.warning("Configs financeiras não encontradas.")
+            resultado = calcular_orcamento(st.session_state.entregaveis, configs)
+            st.metric("Valor Total", f"R$ {resultado['valor_total_cliente']:.2f}")
+            with st.expander("Ver detalhamento"): st.markdown(f"**Custo Equipe:** `R$ {resultado['custo_total_equipe']:.2f}`\n\n**+ Tx. Coordenação ({configs.get('taxa_coordenacao',0)}%):** `R$ {resultado['valor_taxa_coordenacao']:.2f}`\n\n**+ Custos Fixos ({configs.get('custos_fixos',0)}%):** `R$ {resultado['valor_custos_fixos']:.2f}`\n\n**= Subtotal Op.:** `R$ {resultado['subtotal_antes_lucro']:.2f}`\n\n**+ Lucro ({configs.get('margem_lucro',0)}%):** `R$ {resultado['valor_lucro']:.2f}`\n\n**= Subtotal:** `R$ {resultado['subtotal_antes_impostos']:.2f}`\n\n**+ Impostos ({configs.get('impostos',0)}%):** `R$ {resultado['valor_impostos']:.2f}`")
+            st.divider(); nome_cliente = st.text_input("Nome do Cliente/Projeto*")
+            c1,c2=st.columns(2)
+            if c1.button("⬅️ Editar Alocação"): st.session_state.orcamento_step=4; st.rerun()
+            if c2.button("Salvar Orçamento ✅",type="primary",use_container_width=True,disabled=not nome_cliente):
+                dados = {"nome_cliente": nome_cliente, "briefing": st.session_state.dados_briefing, "escopo_final": st.session_state.entregaveis, "resultado_financeiro": resultado}
+                if salvar_orcamento_firestore(db, agencia_id, user_info, dados):
+                    st.session_state.redirect_to_orcamentos = True; st.rerun()
 
-        elif st.session_state.current_view == "Novo Orçamento":
-            if 'orcamento_step' not in st.session_state: st.session_state.current_view = "Painel Principal"; st.rerun()
-            
-            if st.session_state.orcamento_step == 2:
-                st.header(f"Briefing: {st.session_state.get('orcamento_categoria')}"); cat = st.session_state.get('orcamento_categoria');
-                if cat=="Campanha Online": render_form_campanha_online()
-                elif cat=="Campanha Offline": render_form_campanha_offline()
-                elif cat=="Campanha 360": render_form_campanha_360()
-                elif cat=="Projeto Estratégico": render_form_projeto_estrategico()
-                if st.button("⬅️ Voltar ao Painel"): st.session_state.current_view = 'Painel Principal'; st.rerun()
-
-            elif st.session_state.orcamento_step == 3:
-                st.header("🤖 Validação do Escopo"); cat = st.session_state.get('orcamento_categoria', 'N/A')
-                if 'entregaveis' not in st.session_state: st.session_state.entregaveis = [{"descricao": item} for item in get_sugestoes_entregaveis(cat)]
-                c1,c2=st.columns([3,1]); novo=c1.text_input("Novo",label_visibility="collapsed");
-                if c2.button("Adicionar",use_container_width=True) and novo: st.session_state.entregaveis.append({"descricao":novo}); st.rerun()
-                for i, item in enumerate(st.session_state.entregaveis):
-                    c1,c2=st.columns([4,1]); c1.write(f"• {item['descricao']}")
-                    if c2.button("Remover", key=f"rm_{i}",use_container_width=True): st.session_state.entregaveis.pop(i); st.rerun()
-                st.divider(); c1,c2=st.columns(2)
-                if c1.button("⬅️ Editar Briefing"): st.session_state.orcamento_step=2; st.rerun()
-                if c2.button("Avançar para Alocação ➡️",type="primary",use_container_width=True,disabled=not st.session_state.entregaveis): st.session_state.orcamento_step=4; st.rerun()
-            
-            elif st.session_state.orcamento_step == 4:
-                st.header("👨‍💻 Alocação de Horas"); perfis = carregar_perfis_equipe(db, agencia_id)
-                if not perfis: st.warning("Cadastre perfis em 'Configurações'."); st.stop()
-                nomes_perfis = [p['funcao'] for p in perfis]; total_h = 0
-                for i, entr in enumerate(st.session_state.entregaveis):
-                    if 'alocacoes' not in entr: entr['alocacoes']=[]
-                    horas_e = sum(a['horas'] for a in entr['alocacoes']); total_h += horas_e
-                    with st.expander(f"**{i+1}. {entr['descricao']}** ({horas_e}h)"):
-                        for j, aloc in enumerate(entr['alocacoes']):
-                            c1,c2,c3=st.columns([2,1,1]); c1.write(f"• {aloc['perfil_funcao']}"); c2.write(f"{aloc['horas']}h")
-                            if c3.button("X",key=f"rem_{i}_{j}"): st.session_state.entregaveis[i]['alocacoes'].pop(j); st.rerun()
-                        st.divider(); c1,c2,c3=st.columns([2,1,1]); sel=c1.selectbox("Perfil",nomes_perfis,key=f"sel_{i}",index=None); h=c2.number_input("Horas",0.5,step=0.5,key=f"h_{i}")
-                        if c3.button("Adicionar",key=f"add_{i}",disabled=not sel):
-                            p_data = next((p for p in perfis if p['funcao']==sel),None)
-                            if p_data: st.session_state.entregaveis[i]['alocacoes'].append({"perfil_id":p_data['id'],"perfil_funcao":p_data['funcao'],"custo_hora":p_data['custo_hora'],"horas":h}); st.rerun()
-                st.divider(); st.header(f"Total Horas: {total_h}h")
-                c1,c2=st.columns(2)
-                if c1.button("⬅️ Editar Escopo"): st.session_state.orcamento_step=3; st.rerun()
-                if c2.button("Calcular Orçamento ➡️",type="primary",use_container_width=True,disabled=(total_h==0)): st.session_state.orcamento_step=5; st.rerun()
-
-            elif st.session_state.orcamento_step == 5:
-                st.header("📊 Orçamento Preliminar"); configs = carregar_configuracoes_financeiras(db, agencia_id);
-                if not configs: st.warning("Configs financeiras não encontradas.")
-                resultado = calcular_orcamento(st.session_state.entregaveis, configs)
-                st.metric("Valor Total", f"R$ {resultado['valor_total_cliente']:.2f}")
-                with st.expander("Ver detalhamento"): st.markdown(f"**Custo Equipe:** `R$ {resultado['custo_total_equipe']:.2f}`\n\n**+ Tx. Coordenação ({configs.get('taxa_coordenacao',0)}%):** `R$ {resultado['valor_taxa_coordenacao']:.2f}`\n\n**+ Custos Fixos ({configs.get('custos_fixos',0)}%):** `R$ {resultado['valor_custos_fixos']:.2f}`\n\n**= Subtotal Op.:** `R$ {resultado['subtotal_antes_lucro']:.2f}`\n\n**+ Lucro ({configs.get('margem_lucro',0)}%):** `R$ {resultado['valor_lucro']:.2f}`\n\n**= Subtotal:** `R$ {resultado['subtotal_antes_impostos']:.2f}`\n\n**+ Impostos ({configs.get('impostos',0)}%):** `R$ {resultado['valor_impostos']:.2f}`")
-                st.divider(); nome_cliente = st.text_input("Nome do Cliente/Projeto*")
-                c1,c2=st.columns(2)
-                if c1.button("⬅️ Editar Alocação"): st.session_state.orcamento_step=4; st.rerun()
-                if c2.button("Salvar Orçamento ✅",type="primary",use_container_width=True,disabled=not nome_cliente):
-                    dados = {"nome_cliente": nome_cliente, "briefing": st.session_state.dados_briefing, "escopo_final": st.session_state.entregaveis, "resultado_financeiro": resultado}
-                    if salvar_orcamento_firestore(db, agencia_id, user_info, dados):
-                        st.session_state.redirect_to_orcamentos = True; st.rerun()
-
-        elif st.session_state.current_view == "Configurações":
-            st.header("Painel de Configuração da Agência"); agencia_id = user_info['uid']
-            with st.expander("Gerenciar Perfis", expanded=True):
-                with st.form("new_profile_form", clear_on_submit=True):
-                    c1,c2=st.columns([2,1]); funcao=c1.text_input("Função"); custo=c2.number_input("Custo/Hora(R$)",0.0,step=5.0,format="%.2f")
-                    if st.form_submit_button("Adicionar"):
-                        if funcao and custo > 0: db.collection('agencias').document(agencia_id).collection('perfis_equipe').add({"funcao":funcao,"custo_hora":custo}); st.toast("Adicionado!"); st.rerun()
-                st.divider(); perfis=carregar_perfis_equipe(db, agencia_id)
-                if perfis:
-                    c1,c2,c3=st.columns([2,1,1]);c1.write("**Função**");c2.write("**Custo/Hora**")
-                    for p in perfis:
-                        c1,c2,c3=st.columns([2,1,1]);c1.text(p['funcao']);c2.text(f"R$ {p['custo_hora']:.2f}")
-                        if c3.button("Deletar",key=f"del_{p['id']}",type="primary"): db.collection('agencias').document(agencia_id).collection('perfis_equipe').document(p['id']).delete(); st.rerun()
-            with st.form(key="form_config_financeiras"):
-                st.subheader("⚙️ Configurações Financeiras")
-                configs = carregar_configuracoes_financeiras(db, agencia_id); defaults={"margem_lucro":20.0, "impostos":15.0, "custos_fixos":10.0, "taxa_coordenacao":10.0}
-                c1,c2=st.columns(2)
-                lucro = c1.number_input("Margem Lucro (%)", 0.0,value=configs.get("margem_lucro",defaults["margem_lucro"]))
-                impostos = c1.number_input("Impostos (%)", 0.0,value=configs.get("impostos",defaults["impostos"]))
-                fixos = c2.number_input("Custos Fixos (%)", 0.0,value=configs.get("custos_fixos",defaults["custos_fixos"]))
-                coord = c2.number_input("Taxa Coord. (%)", 0.0,value=configs.get("taxa_coordenacao",defaults["taxa_coordenacao"]))
-                if st.form_submit_button("Salvar"):
-                    novas_configs = {"margem_lucro":lucro, "impostos":impostos, "custos_fixos":fixos, "taxa_coordenacao":coord}
-                    db.collection('agencias').document(agencia_id).update({"configuracoes_financeiras":novas_configs})
-                    st.session_state.config_financeiras = novas_configs; st.success("Salvo!")
+    elif st.session_state.current_view == "Configurações":
+        st.header("Painel de Configuração da Agência")
+        with st.expander("Gerenciar Perfis", expanded=True):
+            with st.form("new_profile_form", clear_on_submit=True):
+                c1,c2=st.columns([2,1]); funcao=c1.text_input("Função"); custo=c2.number_input("Custo/Hora(R$)",0.0,step=5.0,format="%.2f")
+                if st.form_submit_button("Adicionar"):
+                    if funcao and custo > 0: db.collection('agencias').document(agencia_id).collection('perfis_equipe').add({"funcao":funcao,"custo_hora":custo}); st.toast("Adicionado!"); st.rerun()
+            st.divider(); perfis=carregar_perfis_equipe(db, agencia_id)
+            if perfis:
+                c1,c2,c3=st.columns([2,1,1]);c1.write("**Função**");c2.write("**Custo/Hora**")
+                for p in perfis:
+                    c1,c2,c3=st.columns([2,1,1]);c1.text(p['funcao']);c2.text(f"R$ {p['custo_hora']:.2f}")
+                    if c3.button("Deletar",key=f"del_{p['id']}",type="primary"): db.collection('agencias').document(agencia_id).collection('perfis_equipe').document(p['id']).delete(); st.rerun()
+        with st.form(key="form_config_financeiras"):
+            st.subheader("⚙️ Configurações Financeiras")
+            configs = carregar_configuracoes_financeiras(db, agencia_id); defaults={"margem_lucro":20.0, "impostos":15.0, "custos_fixos":10.0, "taxa_coordenacao":10.0}
+            c1,c2=st.columns(2)
+            lucro = c1.number_input("Margem Lucro (%)", 0.0,value=configs.get("margem_lucro",defaults["margem_lucro"]))
+            impostos = c1.number_input("Impostos (%)", 0.0,value=configs.get("impostos",defaults["impostos"]))
+            fixos = c2.number_input("Custos Fixos (%)", 0.0,value=configs.get("custos_fixos",defaults["custos_fixos"]))
+            coord = c2.number_input("Taxa Coord. (%)", 0.0,value=configs.get("taxa_coordenacao",defaults["taxa_coordenacao"]))
+            if st.form_submit_button("Salvar"):
+                novas_configs = {"margem_lucro":lucro, "impostos":impostos, "custos_fixos":fixos, "taxa_coordenacao":coord}
+                db.collection('agencias').document(agencia_id).update({"configuracoes_financeiras":novas_configs})
+                st.session_state.config_financeiras = novas_configs; st.success("Salvo!")
 
 if __name__ == '__main__':
     main()
