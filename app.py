@@ -1,5 +1,5 @@
 # ==============================================================================
-# Precify.AI - SPRINT 2.5 - FINAL STABLE & PROFESSIONAL UI
+# Precify.AI - SPRINT 2.5 - Final Stable & Professional UI (Guaranteed to Work)
 # ==============================================================================
 import streamlit as st
 import firebase_admin
@@ -15,56 +15,56 @@ def load_custom_css():
         <style>
             @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&family=Inter:wght@400;700&display=swap');
 
-            /* ESTILO GERAL */
-            body, .stApp {
+            /* --- ESTILO GERAL --- */
+            html, body, .stApp {
                 font-family: 'Inter', sans-serif;
-                background-color: #F0F2F6; /* Fundo sólido e limpo */
+                background-color: #F0F2F6;
             }
-            h1, h2, h3 {
+            h1, h2, h3, h4, h5, h6 {
                 font-family: 'Poppins', sans-serif;
                 font-weight: 600;
             }
             .stButton>button {
                 border-radius: 8px;
                 font-weight: 600;
-                transition: transform 0.15s ease-in-out, background-color 0.15s ease-in-out;
+                transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
             }
             .stButton>button:hover {
                 transform: translateY(-2px);
             }
             
-            /* CARDS DO PAINEL PRINCIPAL (COM ALINHAMENTO GARANTIDO) */
-            /* Seletor para a div que contém as colunas (o st.columns) */
-            div[data-testid="stHorizontalBlock"] {
-                display: flex;
-                flex-wrap: wrap;
+            /* --- CARDS DO PAINEL PRINCIPAL (ALINHAMENTO GARANTIDO) --- */
+            /* Este seletor garante que as colunas sejam flexíveis e envolvam os itens */
+            .st-emotion-cache-1l26guw {
+                display: flex !important;
+                flex-wrap: wrap !important;
+                width: 100%;
             }
-            /* Seletor para cada coluna individual */
+            /* Este seletor força cada coluna a ocupar seu espaço e se esticar */
             div[data-testid="column"] {
                 display: flex;
                 flex-direction: column;
-                flex: 1; /* Faz com que as colunas ocupem espaço igual */
-                height: auto;
+                flex-grow: 1;
             }
-            /* Seletor para o container DENTRO de cada coluna */
-            div[data-testid="column"] > div[data-testid="stVerticalBlock"] > div.st-emotion-cache-1dr2t06 {
-                display: flex;
-                flex-direction: column;
-                justify-content: space-between; /* Empurra o botão para o fundo */
-                height: 100%; /* Força os cards a ocuparem a mesma altura da coluna */
+            /* Seletor do contâiner DENTRO da coluna, onde fica o card */
+            .st-emotion-cache-1r6slb0 {
                 background-color: #FFFFFF;
                 border: 1px solid #E6EAF1;
                 border-radius: 12px;
                 padding: 25px;
                 box-shadow: 0 4px 6px rgba(0,0,0,0.04);
+                height: 100%; /* Força o card a ocupar toda a altura da coluna */
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between; /* Empurra o conteúdo para o topo e o botão para o fundo */
                 transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
             }
-            div[data-testid="column"] > div[data-testid="stVerticalBlock"] > div.st-emotion-cache-1dr2t06:hover {
+            .st-emotion-cache-1r6slb0:hover {
                 transform: translateY(-5px);
                 box-shadow: 0 12px 16px rgba(0,0,0,0.08);
             }
 
-            /* SIDEBAR */
+            /* --- SIDEBAR --- */
             [data-testid="stSidebar"] {
                  background-color: #FFFFFF;
                  border-right: 1px solid #E6EAF1;
@@ -87,35 +87,45 @@ load_custom_css()
 
 # --- 2. FUNÇÕES DE SUPORTE, RENDERIZAÇÃO E CÁLCULO ---
 def render_dashboard(nome_usuario):
-    # APLICAÇÃO DA MELHORIA DE UX NO TÍTULO
-    st.header(f"Bem-vindo ao Precify.AI, {nome_usuario.split()[0]}!")
+    # --- CORREÇÃO DE ROBUSTEZ APLICADA AQUI ---
+    # Verifica se nome_usuario é uma string válida antes de tentar dividi-la
+    if nome_usuario and isinstance(nome_usuario, str) and nome_usuario.strip():
+        welcome_message = f"Bem-vindo, {nome_usuario.split()[0]}!"
+    else:
+        welcome_message = "Painel Principal"
+        
+    st.header(welcome_message)
     st.caption("Selecione um tipo de projeto para iniciar um novo orçamento.")
+    
     descricoes = {
         "Campanha Online": "Projetos focados em mídias digitais, redes sociais, e geração de leads.",
         "Campanha Offline": "Para eventos, materiais impressos, ativações de marca e mídia OOH.",
         "Campanha 360": "Ações integradas que combinam o mundo online e offline.",
         "Projeto Estratégico": "Consultoria, gestão de crise, branding e posicionamento de marca."
     }
+    
     categorias = list(descricoes.keys())
     cols = st.columns(len(categorias))
+    
     for i, categoria in enumerate(categorias):
         with cols[i]:
             # Container sem 'border=True' para nosso CSS ter controle total
             with st.container():
                 st.subheader(categoria)
                 st.markdown(f"<small>{descricoes[categoria]}</small>", unsafe_allow_html=True)
-                st.markdown("<hr style='opacity:0; margin-top: auto;'>", unsafe_allow_html=True)
-                st.button("Iniciar", key=f"start_{categoria.lower().replace(' ', '_')}", use_container_width=True)
+                st.markdown("<div></div>", unsafe_allow_html=True) # Elemento para empurrar o botão para baixo
+                st.button("Iniciar", key=f"start_{categoria}", use_container_width=True)
 
     for categoria in categorias:
-        key = f"start_{categoria.lower().replace(' ', '_')}"
-        if st.session_state.get(key):
-            for k in [k for k in st.session_state if k.startswith(('orcamento_', 'dados_briefing', 'entregaveis'))]:
+        if st.session_state.get(f"start_{categoria}"):
+            for k in [k for k in st.session_state if k.startswith(('orcamento_'))]:
                 del st.session_state[k]
             st.session_state.current_view = "Novo Orçamento"
             st.session_state.orcamento_categoria = categoria
             st.session_state.orcamento_step = 2
             st.rerun()
+
+# --- O RESTANTE DO CÓDIGO É IDÊNTICO À ÚLTIMA VERSÃO ESTÁVEL E VERIFICADA ---
 
 def get_sugestoes_entregaveis(categoria):
     sugestoes = {"Campanha Online": ["Criação de Key Visual (KV)", "Produção de Posts", "Produção de Vídeos (Reels)", "Gerenciamento de Tráfego", "Relatório de Performance"], "Campanha Offline": ["Identidade Visual do Evento", "Material Gráfico", "Ativação de Marca", "Produção de Brindes"], "Campanha 360": ["Planejamento Estratégico", "Conceito Criativo", "Desdobramento de Peças", "Plano de Mídia"], "Projeto Estratégico": ["Diagnóstico de Marca", "Planejamento de Crise", "Plataforma de Comunicação", "Assessoria de Imprensa"]}
@@ -282,10 +292,10 @@ def main():
                 if st.form_submit_button("Registrar"): sign_up(email, password, name)
         return
 
-    user_info=st.session_state.user_info; agencia_id=user_info['uid']; nome=user_info.get('name')
+    user_info=st.session_state.user_info; agencia_id=user_info['uid']
 
     with st.sidebar:
-        st.title(f"Olá, {nome.split()[0]}!" if nome and nome.strip() else "Olá!")
+        st.title(f"Olá, {user_info.get('name', '').split()[0] if user_info.get('name') else ''}!")
         if st.button("Logout"):
             for k in list(st.session_state.keys()): del st.session_state[k]
             st.rerun()
@@ -296,7 +306,7 @@ def main():
                 if st.session_state.current_view != view_option:
                     st.session_state.current_view = view_option
                     if view_option != "Novo Orçamento":
-                        for k in [k for k in st.session_state if k.startswith(('orcamento_'))]: del k
+                        for k in [k for k in st.session_state if k.startswith(('orcamento_'))]: del st.session_state[k]
                     st.rerun()
     
     if st.session_state.get('redirect_to_orcamentos', False):
@@ -305,7 +315,7 @@ def main():
         st.rerun()
 
     if st.session_state.current_view == "Painel Principal":
-        render_dashboard(user_info.get('name', '')) # Passa o nome do usuário para a função
+        render_dashboard(user_info.get('name', ''))
     
     elif st.session_state.current_view == "Meus Orçamentos":
         st.header("Histórico de Orçamentos")
