@@ -1,5 +1,5 @@
 # ==============================================================================
-# Precify.AI - SPRINT 2.5 - Final Stable Version with Professional UI (Guaranteed)
+# Precify.AI - SPRINT 2.5 - FINAL STABLE & PROFESSIONAL UI
 # ==============================================================================
 import streamlit as st
 import firebase_admin
@@ -20,7 +20,7 @@ def load_custom_css():
                 font-family: 'Inter', sans-serif;
                 background-color: #F0F2F6; /* Fundo sólido e limpo */
             }
-            h1, h2, h3, h4, h5, h6 {
+            h1, h2, h3 {
                 font-family: 'Poppins', sans-serif;
                 font-weight: 600;
             }
@@ -33,15 +33,25 @@ def load_custom_css():
                 transform: translateY(-2px);
             }
             
-            /* CARDS DO PAINEL PRINCIPAL (COM ALINHAMENTO CORRIGIDO) */
-            /* O seletor correto e mais estável para os contêineres dos cards */
-            div[data-testid="stVerticalBlock"] > [data-testid="stHorizontalBlock"] > div[data-testid="stVerticalBlock"] {
-                /* ATIVA O FLEXBOX PARA O CONTEÚDO DO CARD */
+            /* CARDS DO PAINEL PRINCIPAL (COM ALINHAMENTO GARANTIDO) */
+            /* Seletor para a div que contém as colunas (o st.columns) */
+            div[data-testid="stHorizontalBlock"] {
+                display: flex;
+                flex-wrap: wrap;
+            }
+            /* Seletor para cada coluna individual */
+            div[data-testid="column"] {
+                display: flex;
+                flex-direction: column;
+                flex: 1; /* Faz com que as colunas ocupem espaço igual */
+                height: auto;
+            }
+            /* Seletor para o container DENTRO de cada coluna */
+            div[data-testid="column"] > div[data-testid="stVerticalBlock"] > div.st-emotion-cache-1dr2t06 {
                 display: flex;
                 flex-direction: column;
                 justify-content: space-between; /* Empurra o botão para o fundo */
-                
-                height: 100%; /* Força os cards a ocuparem a mesma altura */
+                height: 100%; /* Força os cards a ocuparem a mesma altura da coluna */
                 background-color: #FFFFFF;
                 border: 1px solid #E6EAF1;
                 border-radius: 12px;
@@ -49,7 +59,7 @@ def load_custom_css():
                 box-shadow: 0 4px 6px rgba(0,0,0,0.04);
                 transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
             }
-            div[data-testid="stVerticalBlock"] > [data-testid="stHorizontalBlock"] > div[data-testid="stVerticalBlock"]:hover {
+            div[data-testid="column"] > div[data-testid="stVerticalBlock"] > div.st-emotion-cache-1dr2t06:hover {
                 transform: translateY(-5px);
                 box-shadow: 0 12px 16px rgba(0,0,0,0.08);
             }
@@ -76,8 +86,9 @@ def load_custom_css():
 load_custom_css()
 
 # --- 2. FUNÇÕES DE SUPORTE, RENDERIZAÇÃO E CÁLCULO ---
-def render_dashboard():
-    st.header("Painel Principal")
+def render_dashboard(nome_usuario):
+    # APLICAÇÃO DA MELHORIA DE UX NO TÍTULO
+    st.header(f"Bem-vindo ao Precify.AI, {nome_usuario.split()[0]}!")
     st.caption("Selecione um tipo de projeto para iniciar um novo orçamento.")
     descricoes = {
         "Campanha Online": "Projetos focados em mídias digitais, redes sociais, e geração de leads.",
@@ -89,15 +100,13 @@ def render_dashboard():
     cols = st.columns(len(categorias))
     for i, categoria in enumerate(categorias):
         with cols[i]:
-            # Container SEM border=True, nosso CSS cuidará disso
+            # Container sem 'border=True' para nosso CSS ter controle total
             with st.container():
                 st.subheader(categoria)
                 st.markdown(f"<small>{descricoes[categoria]}</small>", unsafe_allow_html=True)
-                # O DIVIDER AJUDA A EMPURRAR O BOTÃO PARA BAIXO NO LAYOUT FLEXBOX
-                st.markdown("<hr style='opacity:0;'>", unsafe_allow_html=True) 
+                st.markdown("<hr style='opacity:0; margin-top: auto;'>", unsafe_allow_html=True)
                 st.button("Iniciar", key=f"start_{categoria.lower().replace(' ', '_')}", use_container_width=True)
 
-    # Lógica dos botões é processada aqui para evitar conflito com a renderização
     for categoria in categorias:
         key = f"start_{categoria.lower().replace(' ', '_')}"
         if st.session_state.get(key):
@@ -107,8 +116,6 @@ def render_dashboard():
             st.session_state.orcamento_categoria = categoria
             st.session_state.orcamento_step = 2
             st.rerun()
-
-# (O resto do código Python permanece o mesmo - 100% funcional)
 
 def get_sugestoes_entregaveis(categoria):
     sugestoes = {"Campanha Online": ["Criação de Key Visual (KV)", "Produção de Posts", "Produção de Vídeos (Reels)", "Gerenciamento de Tráfego", "Relatório de Performance"], "Campanha Offline": ["Identidade Visual do Evento", "Material Gráfico", "Ativação de Marca", "Produção de Brindes"], "Campanha 360": ["Planejamento Estratégico", "Conceito Criativo", "Desdobramento de Peças", "Plano de Mídia"], "Projeto Estratégico": ["Diagnóstico de Marca", "Planejamento de Crise", "Plataforma de Comunicação", "Assessoria de Imprensa"]}
@@ -298,7 +305,7 @@ def main():
         st.rerun()
 
     if st.session_state.current_view == "Painel Principal":
-        render_dashboard()
+        render_dashboard(user_info.get('name', '')) # Passa o nome do usuário para a função
     
     elif st.session_state.current_view == "Meus Orçamentos":
         st.header("Histórico de Orçamentos")
@@ -397,7 +404,6 @@ def main():
                             st.rerun()
                     else:
                         st.warning("Preencha todos os campos para adicionar um perfil.")
-
             st.divider()
             if perfis:
                 c1,c2,c3=st.columns([2,1,1]);c1.write("**Função**");c2.write("**Custo/Hora**")
