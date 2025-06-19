@@ -1,5 +1,5 @@
 # ==============================================================================
-# Precify.AI - SPRINT 2.5 - Final Dashboard Hotfix (Versão Estável e Definitiva)
+# Precify.AI - SPRINT 2.5 - Final Cache Fix (Versão Estável e Definitiva)
 # ==============================================================================
 
 import streamlit as st
@@ -36,19 +36,14 @@ load_custom_css()
 def render_dashboard():
     st.header("Painel Principal")
     st.caption("Selecione um tipo de projeto para iniciar um novo orçamento.")
-    
     descricoes = {
         "Campanha Online": "Projetos focados em mídias digitais, redes sociais, e geração de leads.",
         "Campanha Offline": "Para eventos, materiais impressos, ativações de marca e mídia OOH.",
         "Campanha 360": "Ações integradas que combinam o mundo online e offline.",
         "Projeto Estratégico": "Consultoria, gestão de crise, branding e posicionamento de marca."
     }
-    
-    # --- CORREÇÃO APLICADA AQUI ---
-    # Voltando para a lógica de iteração estável e comprovada.
     categorias = list(descricoes.keys())
     cols = st.columns(len(categorias))
-
     for i, categoria in enumerate(categorias):
         with cols[i]:
             with st.container():
@@ -235,7 +230,6 @@ def main():
             for k in list(st.session_state.keys()): del st.session_state[k]
             st.rerun()
         st.divider()
-
         sidebar_view_options = ["Painel Principal", "Meus Orçamentos", "Configurações"]
         for view_option in sidebar_view_options:
             if st.button(view_option, use_container_width=True, type="primary" if st.session_state.current_view == view_option else "secondary"):
@@ -336,13 +330,20 @@ def main():
             with st.form("new_profile_form", clear_on_submit=True):
                 c1,c2=st.columns([2,1]); funcao=c1.text_input("Função"); custo=c2.number_input("Custo/Hora(R$)",0.0,step=5.0,format="%.2f")
                 if st.form_submit_button("Adicionar"):
-                    if funcao and custo > 0: db.collection('agencias').document(agencia_id).collection('perfis_equipe').add({"funcao":funcao,"custo_hora":custo}); st.toast("Adicionado!"); st.rerun()
+                    if funcao and custo > 0: 
+                        db.collection('agencias').document(agencia_id).collection('perfis_equipe').add({"funcao":funcao,"custo_hora":custo})
+                        st.toast("Adicionado!")
+                        st.cache_data.clear() # --- CORREÇÃO APLICADA AQUI ---
+                        st.rerun()
             st.divider(); perfis=carregar_perfis_equipe(db, agencia_id)
             if perfis:
                 c1,c2,c3=st.columns([2,1,1]);c1.write("**Função**");c2.write("**Custo/Hora**")
                 for p in perfis:
                     c1,c2,c3=st.columns([2,1,1]);c1.text(p['funcao']);c2.text(f"R$ {p['custo_hora']:.2f}")
-                    if c3.button("Deletar",key=f"del_{p['id']}",type="primary"): db.collection('agencias').document(agencia_id).collection('perfis_equipe').document(p['id']).delete(); st.rerun()
+                    if c3.button("Deletar",key=f"del_{p['id']}",type="primary"): 
+                        db.collection('agencias').document(agencia_id).collection('perfis_equipe').document(p['id']).delete()
+                        st.cache_data.clear() # --- CORREÇÃO APLICADA AQUI ---
+                        st.rerun()
         with st.form(key="form_config_financeiras"):
             st.subheader("⚙️ Configurações Financeiras")
             configs = carregar_configuracoes_financeiras(db, agencia_id); defaults={"margem_lucro":20.0, "impostos":15.0, "custos_fixos":10.0, "taxa_coordenacao":10.0}
@@ -354,7 +355,8 @@ def main():
             if st.form_submit_button("Salvar"):
                 novas_configs = {"margem_lucro":lucro, "impostos":impostos, "custos_fixos":fixos, "taxa_coordenacao":coord}
                 db.collection('agencias').document(agencia_id).update({"configuracoes_financeiras":novas_configs})
-                st.session_state.config_financeiras = novas_configs; st.success("Salvo!")
+                st.cache_data.clear() # --- CORREÇÃO APLICADA AQUI ---
+                st.success("Salvo!")
 
 if __name__ == '__main__':
     main()
