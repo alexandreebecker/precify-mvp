@@ -1,5 +1,5 @@
 # ==============================================================================
-# Precify.AI - SPRINT 2.5 - Final Firestore Fix (Versão Estável e Definitiva)
+# Precify.AI - SPRINT 2.5 - Final UX Polish (Versão Estável e Definitiva)
 # ==============================================================================
 
 import streamlit as st
@@ -10,7 +10,8 @@ import json
 from datetime import date, timedelta
 
 # --- 1. CONFIGURAÇÃO DA PÁGINA E ESTILO CUSTOMIZADO ---
-st.set_page_config(page_title="Precify.AI", layout="wide", initial_sidebar_state="auto")
+# ALTERAÇÃO APLICADA AQUI: mudado de "auto" para "expanded"
+st.set_page_config(page_title="Precify.AI", layout="wide", initial_sidebar_state="expanded")
 
 def load_custom_css():
     st.markdown("""
@@ -354,12 +355,9 @@ def main():
             coord = c2.number_input("Taxa Coord. (%)", 0.0,value=configs.get("taxa_coordenacao",defaults["taxa_coordenacao"]))
             if st.form_submit_button("Salvar"):
                 novas_configs = {"margem_lucro":lucro, "impostos":impostos, "custos_fixos":fixos, "taxa_coordenacao":coord}
-                # --- CORREÇÃO APLICADA AQUI ---
-                # Troca 'update' por 'set' com 'merge=True' para uma operação de "salvar ou atualizar"
                 db.collection('agencias').document(agencia_id).set({"configuracoes_financeiras": novas_configs}, merge=True)
                 st.cache_data.clear()
                 st.success("Salvo!")
-                # Adicionado um rerun para garantir que a tela reflita os novos valores salvos
                 st.rerun()
 
 if __name__ == '__main__':
