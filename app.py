@@ -1,5 +1,5 @@
 # ==============================================================================
-# Precify.AI - SPRINT 2.5 - Dashboard Interativo (Versão Completa e Estável)
+# Precify.AI - SPRINT 2.5 - UI Polish (Versão Completa e Estável)
 # ==============================================================================
 
 import streamlit as st
@@ -9,8 +9,35 @@ import pandas as pd
 import json
 from datetime import date, timedelta
 
-# --- 1. CONFIGURAÇÃO DA PÁGINA ---
+# --- 1. CONFIGURAÇÃO DA PÁGINA E ESTILO CUSTOMIZADO ---
 st.set_page_config(page_title="Precify.AI", layout="wide", initial_sidebar_state="auto")
+
+def load_custom_css():
+    """ Injeta CSS customizado para polir a aparência da aplicação. """
+    st.markdown("""
+        <style>
+            /* Melhora a aparência dos cards no dashboard */
+            div[data-testid="stVerticalBlock"] > [data-testid="stHorizontalBlock"] > [data-testid="stVerticalBlock"] {
+                border: 1px solid #E6EAF1; /* Borda sutil */
+                border-radius: 10px;
+                padding: 20px;
+                box-shadow: 0 4px 8px 0 rgba(0,0,0,0.05); /* Sombra mais leve */
+                transition: box-shadow 0.3s ease-in-out, transform 0.2s ease-in-out;
+                transform: scale(1);
+            }
+            div[data-testid="stVerticalBlock"] > [data-testid="stHorizontalBlock"] > [data-testid="stVerticalBlock"]:hover {
+                box-shadow: 0 6px 12px 0 rgba(0,0,0,0.1);
+                transform: scale(1.02);
+            }
+            /* Garante que o botão dentro do card ocupe a largura total */
+            div[data-testid="stVerticalBlock"] > [data-testid="stHorizontalBlock"] > [data-testid="stVerticalBlock"] .stButton>button {
+                width: 100%;
+            }
+        </style>
+        """, unsafe_allow_html=True)
+
+# Carrega o CSS customizado no início da execução
+load_custom_css()
 
 # --- 2. FUNÇÕES DE SUPORTE, RENDERIZAÇÃO E CÁLCULO ---
 
@@ -29,7 +56,8 @@ def render_dashboard():
 
     for i, categoria in enumerate(categorias):
         with cols[i]:
-            with st.container(border=True):
+            # O container agora é estilizado pelo CSS injetado via `load_custom_css`
+            with st.container():
                 st.subheader(categoria)
                 st.markdown(f"<small>{descricoes[categoria]}</small>", unsafe_allow_html=True)
                 st.markdown("---")

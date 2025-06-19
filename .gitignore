@@ -7,3 +7,6 @@ config_agencia.json
 # Arquivos de sistema e cache
 __pycache__/
 .DS_Store
+
+# NÃO ignora o arquivo config.toml, permitindo que ele seja versionado
+!.streamlit/config.toml
