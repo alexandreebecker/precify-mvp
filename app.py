@@ -1,5 +1,5 @@
 # ==============================================================================
-# Precify.AI - SPRINT 2.5 - FINAL RECOVERY. STABLE BASELINE.
+# Precify.AI - SPRINT 2.5 - FINAL RECOVERY. STABLE AND FUNCTIONAL.
 # ==============================================================================
 import streamlit as st
 import firebase_admin
@@ -7,18 +7,56 @@ from firebase_admin import credentials, firestore, auth
 import json
 from datetime import date, timedelta
 
-# --- 1. CONFIGURAÇÃO DA PÁGINA ---
+# --- 1. CONFIGURAÇÃO DA PÁGINA E ESTILO ---
 st.set_page_config(page_title="Precify.AI", layout="wide", initial_sidebar_state="expanded")
 
-# --- NENHUM CSS CUSTOMIZADO. RISCO ZERO. ---
+def load_custom_css():
+    st.markdown("""
+        <style>
+            @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&family=Inter:wght@400;700&display=swap');
 
-# --- 2. FUNÇÕES DE SUPORTE, RENDERIZAÇÃO E CÁLCULO ---
+            /* --- ESTILO GERAL E SEGURO --- */
+            html, body, .stApp {
+                font-family: 'Inter', sans-serif;
+                background-color: #F0F2F6;
+            }
+            h1, h2, h3 {
+                font-family: 'Poppins', sans-serif;
+                font-weight: 600;
+            }
+            
+            /* --- LAYOUT DOS CARDS (À PROVA DE FALHAS) --- */
+            .card-grid {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 1rem;
+            }
+            .card {
+                background-color: #FFFFFF;
+                border: 1px solid #E6EAF1; /* Borda visível */
+                border-radius: 12px;
+                padding: 25px;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.04);
+                height: 100%; /* Força o card a ocupar a altura da coluna */
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between; /* Alinha o botão no fundo */
+            }
+            .card-content {
+                flex-grow: 1; /* Faz o conteúdo crescer e empurrar o botão */
+            }
+        </style>
+    """, unsafe_allow_html=True)
+
+load_custom_css()
+
+# --- 2. FUNÇÕES DE SUPORTE E RENDERIZAÇÃO ---
 def render_dashboard(nome_usuario):
-    # LÓGICA DE BOAS-VINDAS À PROVA DE FALHAS
+    # LÓGICA DE BOAS-VINDAS CORRIGIDA E SEGURA
     if nome_usuario and isinstance(nome_usuario, str) and nome_usuario.strip():
         welcome_message = f"Bem-vindo, {nome_usuario.split()[0]}!"
     else:
-        welcome_message = "Painel Principal" # Fallback seguro
+        welcome_message = "Painel Principal"
     st.header(welcome_message)
     st.caption("Selecione um tipo de projeto para iniciar um novo orçamento.")
 
@@ -29,30 +67,35 @@ def render_dashboard(nome_usuario):
         "Projeto Estratégico": "Consultoria, gestão de crise, branding e posicionamento de marca."
     }
     
-    # LÓGICA DE ALINHAMENTO GARANTIDO: PADRONIZA O TAMANHO DAS DESCRIÇÕES
-    max_len = max(len(s) for s in descricoes.values())
-    descricoes_padded = {
-        cat: f"{desc}<br>{' ' * int((max_len - len(desc)) * 1.6)}" 
-        for cat, desc in descricoes.items()
-    }
-    
     categorias = list(descricoes.keys())
     cols = st.columns(len(categorias))
     
-    for i, categoria in enumerate(categorias):
-        with cols[i]:
-            # USANDO O CONTAINER NATIVO E SEGURO DO STREAMLIT.
-            with st.container(border=True):
-                st.subheader(categoria)
-                st.markdown(f"<small>{descricoes_padded[categoria]}</small>", unsafe_allow_html=True)
-                st.button("Iniciar", key=f"start_{categoria}", use_container_width=True)
-    
-    # Processamento de Ações
-    for categoria in categorias:
-        if st.session_state.get(f"start_{categoria}"):
+    for i, col in enumerate(cols):
+        with col:
+            categoria = categorias[i]
+            # USANDO NOSSAS PRÓPRIAS CLASSES CSS PARA CONTROLE TOTAL
+            st.markdown('<div class="card">', unsafe_allow_html=True)
+            
+            # Conteúdo do card
+            st.markdown('<div class="card-content">', unsafe_allow_html=True)
+            st.subheader(categoria)
+            st.markdown(f"<small>{descricoes[categoria]}</small>", unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+            
+            # Botão
+            if st.button("Iniciar", key=f"start_{categoria}", use_container_width=True):
+                st.session_state.action = ("navigate_to_orcamento", categoria)
+            
+            st.markdown('</div>', unsafe_allow_html=True)
+
+    # Lógica de Navegação
+    if "action" in st.session_state and st.session_state.action:
+        action_type, action_payload = st.session_state.action
+        st.session_state.action = None
+        if action_type == "navigate_to_orcamento":
             for k in [k for k in st.session_state if k.startswith(('orcamento_'))]: del st.session_state[k]
             st.session_state.current_view = "Novo Orçamento"
-            st.session_state.orcamento_categoria = categoria
+            st.session_state.orcamento_categoria = action_payload
             st.session_state.orcamento_step = 2
             st.rerun()
 
@@ -85,7 +128,7 @@ def render_form_campanha_online():
             st.session_state.orcamento_step = 3
             st.rerun()
 
-# --- RESTANTE DO CÓDIGO É A BASE 100% ESTÁVEL ---
+# --- TODO O RESTO DO CÓDIGO É A BASE 100% ESTÁVEL ---
 def get_sugestoes_entregaveis(categoria):
     sugestoes = {"Campanha Online": ["Criação de Key Visual (KV)", "Produção de Posts", "Produção de Vídeos (Reels)", "Gerenciamento de Tráfego", "Relatório de Performance"], "Campanha Offline": ["Identidade Visual do Evento", "Material Gráfico", "Ativação de Marca", "Produção de Brindes"], "Campanha 360": ["Planejamento Estratégico", "Conceito Criativo", "Desdobramento de Peças", "Plano de Mídia"], "Projeto Estratégico": ["Diagnóstico de Marca", "Planejamento de Crise", "Plataforma de Comunicação", "Assessoria de Imprensa"]}
     return sugestoes.get(categoria, ["Definição do Escopo"])
