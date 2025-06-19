@@ -33,38 +33,35 @@ def load_custom_css():
                 transform: translateY(-2px);
             }
             
-            /* --- CARDS DO PAINEL PRINCIPAL (COM ALINHAMENTO GARANTIDO) --- */
-            /* Seletor do st.columns, o container pai */
-            div.st-emotion-cache-1l26guw {
+            /* --- CARDS DO PAINEL PRINCIPAL (LAYOUT SEGURO) --- */
+            .card-grid {
                 display: flex;
                 flex-wrap: wrap;
-                width: 100%;
+                gap: 1rem;
             }
-            /* Seletor de cada coluna */
-            div[data-testid="column"] {
+            .card-column {
                 display: flex; /* Permite que o card dentro se estique */
                 flex-direction: column;
-                flex-grow: 1;
+                flex: 1; /* Faz as colunas terem largura igual */
             }
-            /* Seletor do contâiner DENTRO da coluna, o nosso card */
-            .st-emotion-cache-1r6slb0 {
+            .card {
                 background-color: #FFFFFF;
                 border: 1px solid #E6EAF1;
                 border-radius: 12px;
                 padding: 25px;
                 box-shadow: 0 4px 6px rgba(0,0,0,0.04);
-                height: 100%; /* Força o card a ocupar a altura da coluna */
+                height: 100%; /* Força o card a ocupar toda a altura da coluna */
                 display: flex;
                 flex-direction: column;
-                justify-content: space-between; /* Magia para alinhar botões */
+                justify-content: space-between; /* Empurra o botão para baixo */
                 transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
             }
-            .st-emotion-cache-1r6slb0:hover {
+            .card:hover {
                 transform: translateY(-5px);
                 box-shadow: 0 12px 16px rgba(0,0,0,0.08);
             }
-            .st-emotion-cache-1r6slb0 > div:first-child { /* Conteúdo do card */
-                flex-grow: 1; 
+            .card .content {
+                flex-grow: 1; /* Faz o conteúdo ocupar o espaço disponível */
             }
         </style>
     """, unsafe_allow_html=True)
@@ -73,11 +70,10 @@ load_custom_css()
 
 # --- 2. FUNÇÕES DE SUPORTE, RENDERIZAÇÃO E CÁLCULO ---
 def render_dashboard(nome_usuario):
-    # CORREÇÃO DO AttributeERror, AGORA À PROVA DE FALHAS
     if nome_usuario and isinstance(nome_usuario, str) and nome_usuario.strip():
-        welcome_message = f"Bem-vindo ao Precify.AI, {nome_usuario.split()[0]}!"
+        welcome_message = f"Bem-vindo, {nome_usuario.split()[0]}!"
     else:
-        welcome_message = "Painel Principal" # Fallback seguro
+        welcome_message = "Painel Principal"
     st.header(welcome_message)
     st.caption("Selecione um tipo de projeto para iniciar um novo orçamento.")
     
@@ -88,26 +84,29 @@ def render_dashboard(nome_usuario):
         "Projeto Estratégico": "Consultoria, gestão de crise, branding e posicionamento de marca."
     }
     
+    st.markdown('<div class="card-grid">', unsafe_allow_html=True)
+    cols = st.columns(len(descricoes))
     categorias = list(descricoes.keys())
-    cols = st.columns(len(categorias))
+
+    for i, col in enumerate(cols):
+        with col:
+            categoria = categorias[i]
+            st.markdown(f'<div class="card-column"><div class="card"><div class="content">', unsafe_allow_html=True)
+            st.subheader(categoria)
+            st.markdown(f"<small>{descricoes[categoria]}</small>", unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True) # Fecha a div 'content'
+            st.markdown("---")
+            if st.button("Iniciar", key=f"start_{categoria}", use_container_width=True):
+                st.session_state.action = ("navigate_to_orcamento", categoria)
+            st.markdown('</div></div>', unsafe_allow_html=True)
     
-    for i, categoria in enumerate(categorias):
-        with cols[i]:
-            # Container sem 'border=True' para nosso CSS ter controle total
-            with st.container():
-                st.subheader(categoria)
-                st.markdown(f"<small>{descricoes[categoria]}</small>", unsafe_allow_html=True)
-                st.markdown("---")
-                if st.button("Iniciar", key=f"start_{categoria}", use_container_width=True):
-                    # Define a ação a ser executada APÓS a renderização
-                    st.session_state.action = ("navigate_to_orcamento", categoria)
-    
-    # Processa a ação definida no final do script para evitar conflitos de rerun
+    st.markdown('</div>', unsafe_allow_html=True)
+
     if "action" in st.session_state and st.session_state.action:
         action_type, action_payload = st.session_state.action
         st.session_state.action = None
         if action_type == "navigate_to_orcamento":
-            for k in [k for k in st.session_state if k.startswith(('orcamento_'))]:
+            for k in [k for k in st.session_state if k.startswith(('orcamento_', 'dados_briefing', 'entregaveis'))]:
                 del st.session_state[k]
             st.session_state.current_view = "Novo Orçamento"
             st.session_state.orcamento_categoria = action_payload
@@ -115,44 +114,40 @@ def render_dashboard(nome_usuario):
             st.rerun()
 
 def render_form_campanha_online():
-    # CORREÇÃO FINAL E VERIFICADA DO FORMULÁRIO
     with st.form(key="briefing_online_form"):
         st.info("Descreva o projeto com o máximo de detalhes possível.")
-        dados_form = {}
-        
-        dados_form['briefing_semantico'] = st.text_area("Descreva o objetivo principal da campanha", help="Ex: 'Queremos uma campanha para aumentar o alcance...'")
+        briefing_semantico = st.text_area("Descreva o objetivo principal da campanha", help="Ex: 'Queremos uma campanha para aumentar o alcance...'")
         st.divider()
         col1, col2 = st.columns(2)
         with col1:
-            dados_form['canais'] = st.multiselect("Canais digitais", ["Instagram", "TikTok", "YouTube", "Facebook", "LinkedIn", "Google Ads", "Outro"])
-            dados_form['pecas_estimadas'] = st.number_input("Quantidade de peças", min_value=1, step=1, value=10)
-            
+            canais = st.multiselect("Canais digitais", ["Instagram", "TikTok", "YouTube", "Facebook", "LinkedIn", "Google Ads", "Outro"])
+            pecas_estimadas = st.number_input("Quantidade de peças", min_value=1, step=1, value=10)
             midia_paga_selecao = st.radio("Haverá mídia paga?", ("Não", "Sim"), horizontal=True, key="online_midia")
             verba_midia = st.number_input("Verba de mídia (R$)", min_value=0.0, step=100.0, format="%.2f", disabled=(midia_paga_selecao == "Não"))
-        
         with col2:
-            dados_form['publico_alvo'] = st.text_area("Público-alvo")
-            dados_form['urgencia'] = st.select_slider("Urgência", ["Baixa", "Média", "Alta"], value="Média")
+            publico_alvo = st.text_area("Público-alvo")
+            urgencia = st.select_slider("Urgência", ["Baixa", "Média", "Alta"], value="Média")
             periodo = st.date_input("Período da campanha", value=(date.today(), date.today() + timedelta(days=30)))
             pos_campanha_selecao = st.radio("Acompanhamento pós-campanha?", ("Não", "Sim"), horizontal=True, key="online_pos")
 
         if st.form_submit_button("Avançar para Escopo ➡️"):
             dados_briefing = {
-                "tipo_campanha": "Campanha Online",
-                "briefing_semantico": dados_form['briefing_semantico'], "canais": dados_form['canais'],
-                "pecas_estimadas": dados_form['pecas_estimadas'], "midia_paga": (midia_paga_selecao == "Sim"),
-                "verba_midia": verba_midia if midia_paga_selecao == "Sim" else 0.0,
-                "publico_alvo": dados_form['publico_alvo'], "urgencia": dados_form['urgencia'],
-                "periodo_inicio": str(periodo[0]) if len(periodo) >= 1 else "", "periodo_fim": str(periodo[1]) if len(periodo) == 2 else "",
-                "pos_campanha": (pos_campanha_selecao == "Sim")
+                "tipo_campanha": "Campanha Online", "briefing_semantico": briefing_semantico, "canais": canais,
+                "pecas_estimadas": pecas_estimadas, "midia_paga": (midia_paga_selecao == "Sim"),
+                "verba_midia": verba_midia if midia_paga_selecao == "Sim" else 0.0, "publico_alvo": publico_alvo,
+                "urgencia": urgencia, "periodo_inicio": str(periodo[0]) if len(periodo) >= 1 else "",
+                "periodo_fim": str(periodo[1]) if len(periodo) == 2 else "", "pos_campanha": (pos_campanha_selecao == "Sim")
             }
             st.session_state.dados_briefing = dados_briefing
             st.session_state.orcamento_step = 3
             st.rerun()
+            
+# (O restante do código é idêntico à versão funcional)
+# --- CÓDIGO RESTANTE COMPLETO PARA GARANTIA ---
+def get_sugestoes_entregaveis(categoria):
+    sugestoes = {"Campanha Online": ["Criação de Key Visual (KV)", "Produção de Posts", "Produção de Vídeos (Reels)", "Gerenciamento de Tráfego", "Relatório de Performance"], "Campanha Offline": ["Identidade Visual do Evento", "Material Gráfico", "Ativação de Marca", "Produção de Brindes"], "Campanha 360": ["Planejamento Estratégico", "Conceito Criativo", "Desdobramento de Peças", "Plano de Mídia"], "Projeto Estratégico": ["Diagnóstico de Marca", "Planejamento de Crise", "Plataforma de Comunicação", "Assessoria de Imprensa"]}
+    return sugestoes.get(categoria, ["Definição do Escopo"])
 
-# --- TODO O RESTO DO CÓDIGO É IDÊNTICO À ÚLTIMA VERSÃO ESTÁVEL E VERIFICADA ---
-# ... (código removido para brevidade, mas está completo no bloco de código) ...
-# O resto do código
 def render_form_campanha_offline():
     with st.form(key="briefing_offline_form"):
         st.info("Detalhe a ação offline para estimarmos produção e logística.")
@@ -291,14 +286,9 @@ def main():
     user_info=st.session_state.user_info; agencia_id=user_info['uid']
 
     with st.sidebar:
-        # Lógica de saudação à prova de falhas
         nome_usuario = user_info.get('name')
-        if nome_usuario and isinstance(nome_usuario, str) and nome_usuario.strip():
-            saudacao = f"Olá, {nome_usuario.split()[0]}!"
-        else:
-            saudacao = "Olá!"
+        saudacao = f"Olá, {nome_usuario.split()[0]}!" if nome_usuario and nome_usuario.strip() else "Olá!"
         st.title(saudacao)
-
         if st.button("Logout"):
             for k in list(st.session_state.keys()): del st.session_state[k]
             st.rerun()
@@ -340,7 +330,6 @@ def main():
     elif st.session_state.current_view == "Novo Orçamento":
         if 'orcamento_step' not in st.session_state: st.session_state.current_view = "Painel Principal"; st.rerun()
         if st.button("⬅️ Voltar ao Painel"): st.session_state.current_view = 'Painel Principal'; st.rerun()
-        
         st.header(f"Briefing: {st.session_state.get('orcamento_categoria')}")
         cat = st.session_state.get('orcamento_categoria')
         
@@ -421,7 +410,7 @@ def main():
             if perfis:
                 c1,c2,c3=st.columns([2,1,1]);c1.write("**Função**");c2.write("**Custo/Hora**")
                 for p in perfis:
-                    c1,c2,c3=st.columns([2,1,1]);c1.text(p['funcao']);c2.text(f"R$ {p['costo_hora']:.2f}")
+                    c1,c2,c3=st.columns([2,1,1]);c1.text(p['funcao']);c2.text(f"R$ {p['custo_hora']:.2f}")
                     if c3.button("Deletar",key=f"del_{p['id']}",type="primary"): 
                         db.collection('agencias').document(agencia_id).collection('perfis_equipe').document(p['id']).delete()
                         st.cache_data.clear()
@@ -451,5 +440,6 @@ def main():
                     st.cache_data.clear()
                     st.success("Salvo!")
                     st.rerun()
+
 if __name__ == '__main__':
     main()
