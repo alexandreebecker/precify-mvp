@@ -1,5 +1,5 @@
 # ==============================================================================
-# Precify.AI - SPRINT 2.5 - Final Polish (Versão Completa e Estável)
+# Precify.AI - SPRINT 2.5 - Navigation Hotfix (Versão Completa e Estável)
 # ==============================================================================
 
 import streamlit as st
@@ -61,9 +61,11 @@ def render_dashboard():
                 st.markdown(f"<small>{descricoes[categoria]}</small>", unsafe_allow_html=True)
                 st.markdown("---")
                 if st.button("Iniciar", key=f"start_{categoria.lower().replace(' ', '_')}", use_container_width=True):
+                    # Limpa estados de orçamentos anteriores
                     for k in [k for k in st.session_state if k.startswith(('orcamento_', 'dados_briefing', 'entregaveis'))]:
                         del st.session_state[k]
                     
+                    # Define a nova view e os dados iniciais do orçamento
                     st.session_state.current_view = "Novo Orçamento"
                     st.session_state.orcamento_categoria = categoria
                     st.session_state.orcamento_step = 2
@@ -201,14 +203,11 @@ def salvar_orcamento_firestore(_db, agencia_id, user, dados):
 def sign_up(email, password, name):
     try:
         user = auth.create_user(email=email, password=password, display_name=name)
-        # --- CORREÇÃO DE ESCOPO: 'db' agora é global e acessível aqui ---
         db.collection('agencias').document(user.uid).set({'nome': f"Agência de {name}"})
         st.success("Registrado!")
     except Exception as e: st.error(f"Erro registro: {e}")
 
 # --- 4. INICIALIZAÇÃO E LÓGICA PRINCIPAL ---
-
-# --- CORREÇÃO DE ESCOPO: 'db' inicializado globalmente ---
 db = initialize_firebase()
 
 def main():
@@ -236,34 +235,43 @@ def main():
             st.rerun()
         st.sidebar.divider()
         
-        # --- ALTERAÇÃO DE UX: Refinamento da navegação ---
-        # Lista de todas as telas válidas, incluindo a de "Novo Orçamento" que não está no menu
-        all_valid_views = ["Painel Principal", "Novo Orçamento", "Meus Orçamentos", "Configurações"]
-        # Lista de telas que aparecem no menu da barra lateral
-        sidebar_view_options = ["Painel Principal", "Meus Orçamentos", "Configurações"]
+        # --- CORREÇÃO DE NAVEGAÇÃO ---
+        # Função callback que será chamada QUANDO o usuário clicar no menu
+        def change_view():
+            st.session_state.current_view = st.session_state.sidebar_selection
+            # Limpa o estado do orçamento se o usuário sair do fluxo
+            if st.session_state.current_view != "Novo Orçamento":
+                for k in [k for k in st.session_state if k.startswith('orcamento_')]:
+                    del st.session_state[k]
 
+        # Lógica para definir a view inicial e o índice do menu
+        all_valid_views = ["Painel Principal", "Novo Orçamento", "Meus Orçamentos", "Configurações"]
+        sidebar_view_options = ["Painel Principal", "Meus Orçamentos", "Configurações"]
         if 'current_view' not in st.session_state or st.session_state.current_view not in all_valid_views:
             st.session_state.current_view = "Painel Principal"
         
+        # Redireciona para Meus Orçamentos após salvar um
         if st.session_state.get('redirect_to_orcamentos', False):
-            st.session_state.current_view = "Meus Orçamentos"; del st.session_state.redirect_to_orcamentos
+            st.session_state.current_view = "Meus Orçamentos"
+            del st.session_state['redirect_to_orcamentos']
 
-        # Determina qual opção deve estar selecionada no menu
+        # Determina o índice do menu com base na view atual
         try:
             current_index = sidebar_view_options.index(st.session_state.current_view)
         except ValueError:
-            # Se a view atual (ex: Novo Orçamento) não está no menu, seleciona o Painel Principal por padrão
-            current_index = 0 
+            # Se a view atual é "Novo Orçamento", mantém a seleção do menu em "Painel Principal"
+            current_index = 0
         
-        view = st.sidebar.radio("Menu", sidebar_view_options, index=current_index)
+        # Renderiza o menu. A chave 'sidebar_selection' armazena a escolha do usuário.
+        st.sidebar.radio(
+            "Menu",
+            sidebar_view_options,
+            index=current_index,
+            key='sidebar_selection', # Chave para o valor do widget
+            on_change=change_view # Função a ser executada na mudança
+        )
         
-        if view != st.session_state.current_view:
-            st.session_state.current_view = view
-            if view != "Novo Orçamento":
-                for k in [k for k in st.session_state if k.startswith('orcamento_')]: del st.session_state[k]
-            st.rerun()
-
-        # A lógica de renderização das telas permanece a mesma
+        # Roteador de telas principal
         if st.session_state.current_view == "Painel Principal":
             render_dashboard()
         
@@ -280,21 +288,13 @@ def main():
                         st.markdown(f"**Custo Equipe:** `R$ {res.get('custo_total_equipe', 0):.2f}` | **Tx. Coordenação:** `R$ {res.get('valor_taxa_coordenacao', 0):.2f}` | **Custos Fixos:** `R$ {res.get('valor_custos_fixos', 0):.2f}` | **Lucro:** `R$ {res.get('valor_lucro', 0):.2f}` | **Impostos:** `R$ {res.get('valor_impostos', 0):.2f}`")
                         
                         st.subheader("Escopo Final")
-                        escopo_final = orc_data.get('escopo_final', [])
-                        if escopo_final:
-                            for item in escopo_final:
-                                if isinstance(item, dict) and 'descricao' in item:
-                                    st.write(f"- {item.get('descricao', 'Item sem descrição')}")
-                        else:
-                            st.write("Nenhum escopo definido.")
+                        for item in orc_data.get('escopo_final', []):
+                            if isinstance(item, dict) and 'descricao' in item:
+                                st.write(f"- {item.get('descricao', 'Item sem descrição')}")
 
                         st.subheader("Dados do Briefing")
-                        briefing_dict = orc_data.get('briefing', {})
-                        if briefing_dict:
-                            for k, v in briefing_dict.items():
-                                st.markdown(f"**{k.replace('_', ' ').title()}:** {v}")
-                        else:
-                            st.write("Nenhum dado de briefing salvo.")
+                        for k, v in orc_data.get('briefing', {}).items():
+                            st.markdown(f"**{k.replace('_', ' ').title()}:** {v}")
 
         elif st.session_state.current_view == "Novo Orçamento":
             if 'orcamento_step' not in st.session_state: st.session_state.current_view = "Painel Principal"; st.rerun()
