@@ -1,5 +1,5 @@
 # ==============================================================================
-# Precify.AI - SPRINT 2.5 - COMPLETE REVERT TO STABLE BASELINE
+# Precify.AI - SPRINT 2.5 - FINAL STABLE BASELINE. NO MORE FAILURES.
 # ==============================================================================
 import streamlit as st
 import firebase_admin
@@ -14,8 +14,12 @@ st.set_page_config(page_title="Precify.AI", layout="wide", initial_sidebar_state
 
 # --- 2. FUNÇÕES DE SUPORTE, RENDERIZAÇÃO E CÁLCULO ---
 def render_dashboard(nome_usuario):
-    # LÓGICA DE BOAS-VINDAS À PROVA DE FALHAS
-    st.header("Painel Principal") # VOLTANDO PARA O TÍTULO SIMPLES E FUNCIONAL
+    # LÓGICA DE BOAS-VINDAS FINAL E À PROVA DE FALHAS
+    if nome_usuario and isinstance(nome_usuario, str) and nome_usuario.strip():
+        welcome_message = f"Bem-vindo, {nome_usuario.split()[0]}!"
+    else:
+        welcome_message = "Painel Principal" 
+    st.header(welcome_message)
     st.caption("Selecione um tipo de projeto para iniciar um novo orçamento.")
 
     descricoes = {
@@ -33,7 +37,8 @@ def render_dashboard(nome_usuario):
             with st.container(border=True): # USANDO O CONTAINER NATIVO E SEGURO
                 st.subheader(categoria)
                 st.markdown(f"<small>{descricoes[categoria]}</small>", unsafe_allow_html=True)
-                st.markdown("<br>", unsafe_allow_html=True) # Espaço para alinhar visualmente
+                # Hack de alinhamento com espaço invisível
+                st.markdown("<br>", unsafe_allow_html=True) 
                 st.button("Iniciar", key=f"start_{categoria}", use_container_width=True)
     
     # Processamento de Ações
