@@ -1,5 +1,5 @@
 # ==============================================================================
-# Precify.AI - SPRINT 2.5 - Final Config Validation (Versão Estável e Definitiva)
+# Precify.AI - SPRINT 2.5 - Final Form Interaction Fix (Versão Estável e Definitiva)
 # ==============================================================================
 
 import streamlit as st
@@ -63,6 +63,7 @@ def get_sugestoes_entregaveis(categoria):
     return sugestoes.get(categoria, ["Definição do Escopo"])
 
 def render_form_campanha_online():
+    # --- CORREÇÃO APLICADA AQUI ---
     with st.form(key="briefing_online_form"):
         st.info("Descreva o projeto com o máximo de detalhes possível.")
         dados_form = {"tipo_campanha": "Campanha Online"}
@@ -72,9 +73,19 @@ def render_form_campanha_online():
         with col1:
             dados_form['canais'] = st.multiselect("Canais digitais", ["Instagram", "TikTok", "YouTube", "Facebook", "LinkedIn", "Google Ads", "Outro"])
             dados_form['pecas_estimadas'] = st.number_input("Quantidade de peças", min_value=1, step=1, value=10)
-            midia_paga = st.radio("Haverá mídia paga?", ("Não", "Sim"), horizontal=True, key="online_midia")
-            dados_form['midia_paga'] = (midia_paga == "Sim")
-            if dados_form['midia_paga']: dados_form['verba_midia'] = st.number_input("Verba de mídia (R$)", min_value=0.0, step=100.0, format="%.2f")
+            
+            # 1. O st.radio permanece interativo mesmo dentro do form
+            midia_paga_selecao = st.radio("Haverá mídia paga?", ("Não", "Sim"), horizontal=True, key="online_midia")
+            
+            # 2. O st.number_input é renderizado sempre, mas seu estado 'disabled' é controlado pela seleção do rádio
+            verba_midia = st.number_input(
+                "Verba de mídia (R$)", 
+                min_value=0.0, 
+                step=100.0, 
+                format="%.2f", 
+                disabled=(midia_paga_selecao == "Não")
+            )
+
         with col2:
             dados_form['publico_alvo'] = st.text_area("Público-alvo")
             dados_form['urgencia'] = st.select_slider("Urgência", ["Baixa", "Média", "Alta"], value="Média")
@@ -82,8 +93,16 @@ def render_form_campanha_online():
             if len(periodo) == 2: dados_form['periodo_inicio'], dados_form['periodo_fim'] = str(periodo[0]), str(periodo[1])
             pos_campanha = st.radio("Acompanhamento pós-campanha?", ("Não", "Sim"), horizontal=True, key="online_pos")
             dados_form['pos_campanha'] = (pos_campanha == "Sim")
+        
         if st.form_submit_button("Avançar para Escopo ➡️"):
-            st.session_state.dados_briefing = dados_form; st.session_state.orcamento_step = 3; st.rerun()
+            # 3. Na submissão, salvamos os valores corretos
+            dados_form['midia_paga'] = (midia_paga_selecao == "Sim")
+            if dados_form['midia_paga']:
+                dados_form['verba_midia'] = verba_midia
+            
+            st.session_state.dados_briefing = dados_form
+            st.session_state.orcamento_step = 3
+            st.rerun()
 
 def render_form_campanha_offline():
     with st.form(key="briefing_offline_form"):
@@ -267,6 +286,7 @@ def main():
     elif st.session_state.current_view == "Novo Orçamento":
         if 'orcamento_step' not in st.session_state: st.session_state.current_view = "Painel Principal"; st.rerun()
         if st.button("⬅️ Voltar ao Painel"): st.session_state.current_view = 'Painel Principal'; st.rerun()
+        
         st.header(f"Briefing: {st.session_state.get('orcamento_categoria')}")
         cat = st.session_state.get('orcamento_categoria')
         
@@ -332,7 +352,6 @@ def main():
             with st.form("new_profile_form", clear_on_submit=True):
                 c1,c2=st.columns([2,1]); funcao=c1.text_input("Função"); custo=c2.number_input("Custo/Hora(R$)",0.0,step=5.0,format="%.2f")
                 if st.form_submit_button("Adicionar Perfil"):
-                    # --- MELHORIA APLICADA AQUI (VALIDAÇÃO) ---
                     nomes_perfis_existentes = [p['funcao'].strip().lower() for p in perfis]
                     if funcao and custo > 0: 
                         if funcao.strip().lower() in nomes_perfis_existentes:
@@ -361,7 +380,6 @@ def main():
             st.subheader("⚙️ Configurações Financeiras")
             configs = carregar_configuracoes_financeiras(db, agencia_id); defaults={"margem_lucro":20.0, "impostos":15.0, "custos_fixos":10.0, "taxa_coordenacao":10.0}
 
-            # --- MELHORIA APLICADA AQUI (VISUALIZAÇÃO) ---
             st.write("**Valores Atuais:**")
             c1, c2, c3, c4 = st.columns(4)
             c1.metric("Margem de Lucro", f"{configs.get('margem_lucro', 0):.1f}%")
