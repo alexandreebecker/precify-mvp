@@ -1,5 +1,5 @@
 # ==============================================================================
-# Precify.AI - SPRINT 2.5 - "WOW FACTOR" UI Overhaul
+# Precify.AI - SPRINT 2.5 - "WOW FACTOR" Final Fix (Versão Estável e Definitiva)
 # ==============================================================================
 
 import streamlit as st
@@ -13,6 +13,7 @@ from datetime import date, timedelta
 st.set_page_config(page_title="Precify.AI", layout="wide", initial_sidebar_state="expanded")
 
 def load_custom_css():
+    # Removido o config.toml. O CSS agora é a única fonte da verdade.
     st.markdown("""
         <style>
             /* --- FONTES DO GOOGLE --- */
@@ -31,7 +32,7 @@ def load_custom_css():
             }
 
             /* --- ESTILO GERAL DO CORPO --- */
-            body {
+            html, body, .stApp {
                 font-family: 'Inter', sans-serif;
                 background: linear-gradient(180deg, #F0F2F6 0%, #E6EAF1 100%);
             }
@@ -47,32 +48,24 @@ def load_custom_css():
                 to { opacity: 1; transform: translateY(0); }
             }
             
-            @keyframes pulse-glow {
-                0% { box-shadow: 0 0 5px #F62B7C, 0 0 10px #F62B7C; }
-                50% { box-shadow: 0 0 15px #F62B7C, 0 0 25px #F62B7C; }
-                100% { box-shadow: 0 0 5px #F62B7C, 0 0 10px #F62B7C; }
-            }
-
-            .stApp > header {
-                animation: fadeIn 0.5s ease-out;
-            }
             .main .block-container {
-                 animation: fadeIn 0.7s ease-out;
+                 animation: fadeIn 0.5s ease-out forwards;
+                 opacity: 0;
             }
 
             /* --- CARDS DO DASHBOARD (O "WOW") --- */
             div[data-testid="stVerticalBlock"] > [data-testid="stHorizontalBlock"] > [data-testid="stVerticalBlock"] {
                 border: 1px solid var(--light-gray);
                 background-color: var(--secondary-background-color);
-                border-radius: 10px;
+                border-radius: 12px;
                 padding: 25px;
-                box-shadow: 0 8px 16px rgba(0,0,0,0.05);
+                box-shadow: 0 8px 16px rgba(0,0,0,0.04);
                 transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
                 will-change: transform, box-shadow;
             }
 
             div[data-testid="stVerticalBlock"] > [data-testid="stHorizontalBlock"] > [data-testid="stVerticalBlock"]:hover {
-                transform: translateY(-5px) scale(1.03);
+                transform: translateY(-5px) scale(1.02);
                 box-shadow: 0 12px 24px rgba(93, 95, 239, 0.1), 0 5px 10px rgba(246, 43, 124, 0.1);
                 border-color: var(--accent-color);
             }
@@ -82,6 +75,7 @@ def load_custom_css():
                 border-radius: 8px;
                 transition: all 0.2s ease-out;
                 border: none;
+                font-weight: 600;
             }
 
             .stButton>button:hover {
@@ -89,30 +83,28 @@ def load_custom_css():
                 filter: brightness(1.1);
             }
             
-            /* Botão primário (com gradiente e animação) */
+            /* Botão primário (com gradiente) */
             .stButton>button[kind="primary"] {
                 color: white;
                 background: linear-gradient(45deg, var(--gradient-start), var(--gradient-end));
-                box-shadow: 0 4px 15px rgba(93, 95, 239, 0.4);
+                box-shadow: 0 4px 15px rgba(93, 95, 239, 0.3);
             }
             .stButton>button[kind="primary"]:hover {
-                box-shadow: 0 6px 20px rgba(93, 95, 239, 0.5);
+                box-shadow: 0 6px 20px rgba(93, 95, 239, 0.4);
             }
             
-            /* Dando o brilho ao botão final de salvar */
-            button[kind="primary"] span:contains("Salvar Novas Configurações"),
-            button[kind="primary"] span:contains("Salvar Orçamento"),
-            button[kind="primary"] span:contains("Avançar para Alocação") {
-                animation: pulse-glow 2s infinite ease-in-out;
-            }
-
             /* --- SIDEBAR --- */
             [data-testid="stSidebar"] {
                 border-right: 1px solid var(--light-gray);
                 background-color: var(--secondary-background-color);
             }
+            [data-testid="stSidebar"] .stButton>button {
+                 text-align: left;
+                 padding-left: 20px;
+            }
             [data-testid="stSidebar"] .stButton>button[kind="secondary"] {
-                 background-color: #F0F2F6;
+                 background-color: transparent;
+                 color: #555;
             }
              [data-testid="stSidebar"] .stButton>button[kind="primary"] {
                  box-shadow: none; /* Remover sombra do botão ativo na sidebar */
@@ -123,8 +115,7 @@ def load_custom_css():
 
 load_custom_css()
 
-# O restante do código permanece o mesmo. Eu o incluirei para garantir que você tenha o arquivo completo.
-# --- 2. FUNÇÕES DE SUPORTE, RENDERIZAÇÃO E CÁLCULO ---
+# O resto do código permanece idêntico à versão funcional.
 def render_dashboard():
     st.header("Painel Principal")
     st.caption("Selecione um tipo de projeto para iniciar um novo orçamento.")
