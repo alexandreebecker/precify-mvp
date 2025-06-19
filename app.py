@@ -1,5 +1,5 @@
 # ==============================================================================
-# Precify.AI - SPRINT 2.5 - Final Form Interaction Fix (Versão Estável e Definitiva)
+# Precify.AI - SPRINT 2.5 - "WOW FACTOR" UI Overhaul
 # ==============================================================================
 
 import streamlit as st
@@ -15,23 +15,115 @@ st.set_page_config(page_title="Precify.AI", layout="wide", initial_sidebar_state
 def load_custom_css():
     st.markdown("""
         <style>
+            /* --- FONTES DO GOOGLE --- */
+            @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&family=Inter:wght@400;700&display=swap');
+
+            /* --- DEFINIÇÃO DE VARIÁVEIS DE COR --- */
+            :root {
+                --primary-color: #4F8BF9;
+                --gradient-start: #5D5FEF;
+                --gradient-end: #4F8BF9;
+                --accent-color: #F62B7C; /* Magenta Vibrante */
+                --background-color: #F0F2F6;
+                --secondary-background-color: #FFFFFF;
+                --text-color: #262730;
+                --light-gray: #E6EAF1;
+            }
+
+            /* --- ESTILO GERAL DO CORPO --- */
+            body {
+                font-family: 'Inter', sans-serif;
+                background: linear-gradient(180deg, #F0F2F6 0%, #E6EAF1 100%);
+            }
+
+            h1, h2, h3, h4, h5, h6 {
+                font-family: 'Poppins', sans-serif;
+                font-weight: 600;
+            }
+
+            /* --- ANIMAÇÕES --- */
+            @keyframes fadeIn {
+                from { opacity: 0; transform: translateY(10px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
+            
+            @keyframes pulse-glow {
+                0% { box-shadow: 0 0 5px #F62B7C, 0 0 10px #F62B7C; }
+                50% { box-shadow: 0 0 15px #F62B7C, 0 0 25px #F62B7C; }
+                100% { box-shadow: 0 0 5px #F62B7C, 0 0 10px #F62B7C; }
+            }
+
+            .stApp > header {
+                animation: fadeIn 0.5s ease-out;
+            }
+            .main .block-container {
+                 animation: fadeIn 0.7s ease-out;
+            }
+
+            /* --- CARDS DO DASHBOARD (O "WOW") --- */
             div[data-testid="stVerticalBlock"] > [data-testid="stHorizontalBlock"] > [data-testid="stVerticalBlock"] {
-                border: 1px solid #E6EAF1; border-radius: 10px; padding: 20px;
-                box-shadow: 0 4px 8px 0 rgba(0,0,0,0.05);
-                transition: box-shadow 0.3s ease-in-out, transform 0.2s ease-in-out;
-                transform: scale(1);
+                border: 1px solid var(--light-gray);
+                background-color: var(--secondary-background-color);
+                border-radius: 10px;
+                padding: 25px;
+                box-shadow: 0 8px 16px rgba(0,0,0,0.05);
+                transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+                will-change: transform, box-shadow;
             }
+
             div[data-testid="stVerticalBlock"] > [data-testid="stHorizontalBlock"] > [data-testid="stVerticalBlock"]:hover {
-                box-shadow: 0 6px 12px 0 rgba(0,0,0,0.1); transform: scale(1.02);
+                transform: translateY(-5px) scale(1.03);
+                box-shadow: 0 12px 24px rgba(93, 95, 239, 0.1), 0 5px 10px rgba(246, 43, 124, 0.1);
+                border-color: var(--accent-color);
             }
-            div[data-testid="stVerticalBlock"] > [data-testid="stHorizontalBlock"] > [data-testid="stVerticalBlock"] .stButton>button {
-                width: 100%;
+            
+            /* --- BOTÕES --- */
+            .stButton>button {
+                border-radius: 8px;
+                transition: all 0.2s ease-out;
+                border: none;
             }
+
+            .stButton>button:hover {
+                transform: translateY(-2px);
+                filter: brightness(1.1);
+            }
+            
+            /* Botão primário (com gradiente e animação) */
+            .stButton>button[kind="primary"] {
+                color: white;
+                background: linear-gradient(45deg, var(--gradient-start), var(--gradient-end));
+                box-shadow: 0 4px 15px rgba(93, 95, 239, 0.4);
+            }
+            .stButton>button[kind="primary"]:hover {
+                box-shadow: 0 6px 20px rgba(93, 95, 239, 0.5);
+            }
+            
+            /* Dando o brilho ao botão final de salvar */
+            button[kind="primary"] span:contains("Salvar Novas Configurações"),
+            button[kind="primary"] span:contains("Salvar Orçamento"),
+            button[kind="primary"] span:contains("Avançar para Alocação") {
+                animation: pulse-glow 2s infinite ease-in-out;
+            }
+
+            /* --- SIDEBAR --- */
+            [data-testid="stSidebar"] {
+                border-right: 1px solid var(--light-gray);
+                background-color: var(--secondary-background-color);
+            }
+            [data-testid="stSidebar"] .stButton>button[kind="secondary"] {
+                 background-color: #F0F2F6;
+            }
+             [data-testid="stSidebar"] .stButton>button[kind="primary"] {
+                 box-shadow: none; /* Remover sombra do botão ativo na sidebar */
+            }
+
         </style>
         """, unsafe_allow_html=True)
 
 load_custom_css()
 
+# O restante do código permanece o mesmo. Eu o incluirei para garantir que você tenha o arquivo completo.
 # --- 2. FUNÇÕES DE SUPORTE, RENDERIZAÇÃO E CÁLCULO ---
 def render_dashboard():
     st.header("Painel Principal")
@@ -63,7 +155,6 @@ def get_sugestoes_entregaveis(categoria):
     return sugestoes.get(categoria, ["Definição do Escopo"])
 
 def render_form_campanha_online():
-    # --- CORREÇÃO APLICADA AQUI ---
     with st.form(key="briefing_online_form"):
         st.info("Descreva o projeto com o máximo de detalhes possível.")
         dados_form = {"tipo_campanha": "Campanha Online"}
@@ -73,11 +164,7 @@ def render_form_campanha_online():
         with col1:
             dados_form['canais'] = st.multiselect("Canais digitais", ["Instagram", "TikTok", "YouTube", "Facebook", "LinkedIn", "Google Ads", "Outro"])
             dados_form['pecas_estimadas'] = st.number_input("Quantidade de peças", min_value=1, step=1, value=10)
-            
-            # 1. O st.radio permanece interativo mesmo dentro do form
             midia_paga_selecao = st.radio("Haverá mídia paga?", ("Não", "Sim"), horizontal=True, key="online_midia")
-            
-            # 2. O st.number_input é renderizado sempre, mas seu estado 'disabled' é controlado pela seleção do rádio
             verba_midia = st.number_input(
                 "Verba de mídia (R$)", 
                 min_value=0.0, 
@@ -95,11 +182,9 @@ def render_form_campanha_online():
             dados_form['pos_campanha'] = (pos_campanha == "Sim")
         
         if st.form_submit_button("Avançar para Escopo ➡️"):
-            # 3. Na submissão, salvamos os valores corretos
             dados_form['midia_paga'] = (midia_paga_selecao == "Sim")
             if dados_form['midia_paga']:
                 dados_form['verba_midia'] = verba_midia
-            
             st.session_state.dados_briefing = dados_form
             st.session_state.orcamento_step = 3
             st.rerun()
