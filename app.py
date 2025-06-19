@@ -1,5 +1,5 @@
 # ==============================================================================
-# Precify.AI - SPRINT 2.5 - FINAL RECOVERY. STABLE BASELINE GUARANTEED.
+# Precify.AI - SPRINT 2.5 - FINAL RECOVERY. STABLE BASELINE.
 # ==============================================================================
 import streamlit as st
 import firebase_admin
@@ -10,7 +10,7 @@ from datetime import date, timedelta
 # --- 1. CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(page_title="Precify.AI", layout="wide", initial_sidebar_state="expanded")
 
-# NENHUM CSS CUSTOMIZADO. USAMOS APENAS AS FERRAMENTAS NATIVAS E SEGURAS.
+# --- NENHUM CSS CUSTOMIZADO. RISCO ZERO. ---
 
 # --- 2. FUNÇÕES DE SUPORTE, RENDERIZAÇÃO E CÁLCULO ---
 def render_dashboard(nome_usuario):
@@ -32,7 +32,7 @@ def render_dashboard(nome_usuario):
     # LÓGICA DE ALINHAMENTO GARANTIDO: PADRONIZA O TAMANHO DAS DESCRIÇÕES
     max_len = max(len(s) for s in descricoes.values())
     descricoes_padded = {
-        cat: f"{desc}<br>{' ' * int((max_len - len(desc)) * 1.5)}" 
+        cat: f"{desc}<br>{' ' * int((max_len - len(desc)) * 1.6)}" 
         for cat, desc in descricoes.items()
     }
     
@@ -41,7 +41,8 @@ def render_dashboard(nome_usuario):
     
     for i, categoria in enumerate(categorias):
         with cols[i]:
-            with st.container(border=True): # USANDO O CONTAINER NATIVO E SEGURO
+            # USANDO O CONTAINER NATIVO E SEGURO DO STREAMLIT.
+            with st.container(border=True):
                 st.subheader(categoria)
                 st.markdown(f"<small>{descricoes_padded[categoria]}</small>", unsafe_allow_html=True)
                 st.button("Iniciar", key=f"start_{categoria}", use_container_width=True)
@@ -84,7 +85,7 @@ def render_form_campanha_online():
             st.session_state.orcamento_step = 3
             st.rerun()
 
-# --- TODO O RESTO DO CÓDIGO É A BASE 100% ESTÁVEL ---
+# --- RESTANTE DO CÓDIGO É A BASE 100% ESTÁVEL ---
 def get_sugestoes_entregaveis(categoria):
     sugestoes = {"Campanha Online": ["Criação de Key Visual (KV)", "Produção de Posts", "Produção de Vídeos (Reels)", "Gerenciamento de Tráfego", "Relatório de Performance"], "Campanha Offline": ["Identidade Visual do Evento", "Material Gráfico", "Ativação de Marca", "Produção de Brindes"], "Campanha 360": ["Planejamento Estratégico", "Conceito Criativo", "Desdobramento de Peças", "Plano de Mídia"], "Projeto Estratégico": ["Diagnóstico de Marca", "Planejamento de Crise", "Plataforma de Comunicação", "Assessoria de Imprensa"]}
     return sugestoes.get(categoria, ["Definição do Escopo"])
@@ -271,6 +272,7 @@ def main():
     elif st.session_state.current_view == "Novo Orçamento":
         if 'orcamento_step' not in st.session_state: st.session_state.current_view = "Painel Principal"; st.rerun()
         if st.button("⬅️ Voltar ao Painel"): st.session_state.current_view = 'Painel Principal'; st.rerun()
+        
         st.header(f"Briefing: {st.session_state.get('orcamento_categoria')}")
         cat = st.session_state.get('orcamento_categoria')
         
