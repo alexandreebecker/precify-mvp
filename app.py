@@ -1,5 +1,5 @@
 # ==============================================================================
-# Precify.AI - SPRINT 2.5 - Final Navigation Fix (Versão Definitiva e Estável)
+# Precify.AI - SPRINT 2.5 - Final Dashboard Hotfix (Versão Estável e Definitiva)
 # ==============================================================================
 
 import streamlit as st
@@ -36,24 +36,30 @@ load_custom_css()
 def render_dashboard():
     st.header("Painel Principal")
     st.caption("Selecione um tipo de projeto para iniciar um novo orçamento.")
+    
     descricoes = {
         "Campanha Online": "Projetos focados em mídias digitais, redes sociais, e geração de leads.",
         "Campanha Offline": "Para eventos, materiais impressos, ativações de marca e mídia OOH.",
         "Campanha 360": "Ações integradas que combinam o mundo online e offline.",
         "Projeto Estratégico": "Consultoria, gestão de crise, branding e posicionamento de marca."
     }
-    for i, (categoria, desc) in enumerate(st.columns(len(descricoes))):
-        with desc:
-            cat_key = list(descricoes.keys())[i]
+    
+    # --- CORREÇÃO APLICADA AQUI ---
+    # Voltando para a lógica de iteração estável e comprovada.
+    categorias = list(descricoes.keys())
+    cols = st.columns(len(categorias))
+
+    for i, categoria in enumerate(categorias):
+        with cols[i]:
             with st.container():
-                st.subheader(cat_key)
-                st.markdown(f"<small>{descricoes[cat_key]}</small>", unsafe_allow_html=True)
+                st.subheader(categoria)
+                st.markdown(f"<small>{descricoes[categoria]}</small>", unsafe_allow_html=True)
                 st.markdown("---")
-                if st.button("Iniciar", key=f"start_{cat_key.lower().replace(' ', '_')}", use_container_width=True):
+                if st.button("Iniciar", key=f"start_{categoria.lower().replace(' ', '_')}", use_container_width=True):
                     for k in [k for k in st.session_state if k.startswith(('orcamento_', 'dados_briefing', 'entregaveis'))]:
                         del st.session_state[k]
                     st.session_state.current_view = "Novo Orçamento"
-                    st.session_state.orcamento_categoria = cat_key
+                    st.session_state.orcamento_categoria = categoria
                     st.session_state.orcamento_step = 2
                     st.rerun()
 
@@ -199,11 +205,9 @@ db = initialize_firebase()
 def main():
     if db is None: st.stop()
 
-    # Inicialização do estado da sessão
     if 'logged_in' not in st.session_state: st.session_state.logged_in = False
     if 'current_view' not in st.session_state: st.session_state.current_view = "Painel Principal"
     
-    # Roteador de Login
     if not st.session_state.logged_in:
         st.title("Bem-vindo ao Precify.AI"); choice = st.selectbox("Acessar", ["Login", "Registrar"], label_visibility="collapsed")
         if choice == "Login":
@@ -214,19 +218,17 @@ def main():
                         user=auth.get_user_by_email(email)
                         st.session_state.logged_in=True
                         st.session_state.user_info={"name":user.display_name,"email":user.email,"uid":user.uid}
-                        st.session_state.current_view = "Painel Principal" # Garante que sempre comece no painel
+                        st.session_state.current_view = "Painel Principal"
                         st.rerun()
                     except Exception: st.error("Credenciais inválidas.")
         else:
             with st.form("register_form"):
                 name=st.text_input("Nome"); email=st.text_input("Email"); password=st.text_input("Senha",type="password")
                 if st.form_submit_button("Registrar"): sign_up(email, password, name)
-        return # Encerra a execução aqui para não logados
+        return
 
-    # --- LÓGICA DA APLICAÇÃO PARA USUÁRIOS LOGADOS ---
     user_info=st.session_state.user_info; agencia_id=user_info['uid']; nome=user_info.get('name')
 
-    # Menu Lateral (Sidebar)
     with st.sidebar:
         st.title(f"Olá, {nome.split()[0]}!" if nome and nome.strip() else "Olá!")
         if st.button("Logout"):
@@ -235,24 +237,19 @@ def main():
         st.divider()
 
         sidebar_view_options = ["Painel Principal", "Meus Orçamentos", "Configurações"]
-        # O menu não controla mais a tela, apenas reflete o estado ou o muda se clicado
         for view_option in sidebar_view_options:
-            # Usa um botão para cada item do menu para um controle explícito
             if st.button(view_option, use_container_width=True, type="primary" if st.session_state.current_view == view_option else "secondary"):
-                st.session_state.current_view = view_option
-                # Limpa estado de orçamento se sair do fluxo
-                if view_option != "Novo Orçamento":
-                    for k in [k for k in st.session_state if k.startswith(('orcamento_', 'dados_briefing', 'entregaveis'))]:
-                        del st.session_state[k]
-                st.rerun()
+                if st.session_state.current_view != view_option:
+                    st.session_state.current_view = view_option
+                    if view_option != "Novo Orçamento":
+                        for k in [k for k in st.session_state if k.startswith(('orcamento_'))]: del k
+                    st.rerun()
     
-    # Redirecionamento após salvar
     if st.session_state.get('redirect_to_orcamentos', False):
         st.session_state.current_view = "Meus Orçamentos"
         del st.session_state['redirect_to_orcamentos']
         st.rerun()
 
-    # Roteador de Telas Principal
     if st.session_state.current_view == "Painel Principal":
         render_dashboard()
     
@@ -276,7 +273,6 @@ def main():
     elif st.session_state.current_view == "Novo Orçamento":
         if 'orcamento_step' not in st.session_state: st.session_state.current_view = "Painel Principal"; st.rerun()
         if st.button("⬅️ Voltar ao Painel"): st.session_state.current_view = 'Painel Principal'; st.rerun()
-        
         st.header(f"Briefing: {st.session_state.get('orcamento_categoria')}")
         cat = st.session_state.get('orcamento_categoria')
         
